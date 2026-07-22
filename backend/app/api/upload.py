@@ -66,6 +66,7 @@ async def preview_upload_file(file: UploadFile = File(...)):
 async def validate_dataset_mapping(mapping: ColumnMappingRequest):
     """
     Step 2: Generate Dataset Health Report & Price Sanity Check using selected columns.
+    Generates a full 11-phase compatible Data Quality Report.
     """
     temp_path = DATA_DIR / mapping.temp_filename
     if not temp_path.exists():
@@ -99,9 +100,10 @@ async def validate_dataset_mapping(mapping: ColumnMappingRequest):
             is_suspicious = True
             warning_msg = f"⚠️ Price Sanity Alert: Minimum booking price (₹{price_min:,.0f}) is below standard operational thresholds."
 
-        dates = pd.to_datetime(df[mapping.date_col], errors="coerce").dropna()
-        date_start = dates.min().strftime("%Y-%m-%d") if not dates.empty else "N/A"
-        date_end = dates.max().strftime("%Y-%m-%d") if not dates.empty else "N/A"
+        dates = pd.to_datetime(df[mapping.date_col], errors="coerce")
+        valid_dates = dates.dropna()
+        date_start = valid_dates.min().strftime("%Y-%m-%d") if not valid_dates.empty else "N/A"
+        date_end = valid_dates.max().strftime("%Y-%m-%d") if not valid_dates.empty else "N/A"
 
         slot_dist = {}
         if mapping.slot_col and mapping.slot_col in df.columns:
@@ -114,6 +116,38 @@ async def validate_dataset_mapping(mapping: ColumnMappingRequest):
         clean_rows = len(prices)
         missing_count = int(df[[mapping.price_col, mapping.date_col]].isna().sum().sum())
         duplicate_rows = int(df.duplicated().sum())
+
+        # Advanced Data Quality Report metrics (Phase 1)
+        all_columns = [str(c) for c in df.columns]
+        columns_missing_values = {str(k): int(v) for k, v in df.isna().sum().to_dict().items()}
+        invalid_dates_count = int(dates.isna().sum())
+
+        inconsistent_slots_count = 0
+        if mapping.slot_col and mapping.slot_col in df.columns:
+            valid_slots = ["12H_DAY", "12H_NIGHT", "24H_DAY", "24H_NIGHT", "COUPLE_DAY", "COUPLE_NIGHT", "COUPLE_SLOT"]
+            for slot_val in df[mapping.slot_col].dropna():
+                norm = str(slot_val).upper().strip().replace(" ", "_")
+                if norm not in valid_slots:
+                    inconsistent_slots_count += 1
+
+        pricing_inconsistencies_count = int((pd.to_numeric(df[mapping.price_col], errors="coerce").fillna(0) <= 0).sum())
+        pricing_inconsistencies_count += int((pd.to_numeric(df[mapping.price_col], errors="coerce").fillna(0) > 50000.0).sum())
+
+        # Patterns, seasonal and owner summaries
+        weekend_pct = 0.0
+        if not valid_dates.empty:
+            weekend_pct = (valid_dates.dt.weekday.isin([5, 6]).sum() / len(valid_dates)) * 100.0
+        booking_patterns_summary = f"Weekend bookings account for {weekend_pct:.1f}% of all dates. Demand shifts based on weekend timing."
+
+        peak_months_str = "None"
+        if not valid_dates.empty:
+            months = valid_dates.dt.month.value_counts()
+            peak_m = [m for m, count in months.items() if count > (len(valid_dates) / 12)]
+            if peak_m:
+                peak_months_str = ", ".join([datetime(2023, m, 1).strftime("%B") for m in peak_m])
+        seasonal_behaviour_summary = f"Peak booking frequency detected during: {peak_months_str}."
+
+        owner_pricing_behaviour_summary = f"Owner pricing spans from ₹{price_min:,.0f} to ₹{price_max:,.0f} (Median: ₹{price_median:,.0f})."
 
         preview = df.head(5).fillna("").to_dict(orient="records")
 
@@ -132,7 +166,15 @@ async def validate_dataset_mapping(mapping: ColumnMappingRequest):
             date_start=date_start,
             date_end=date_end,
             slot_distribution=slot_dist,
-            preview_data=preview
+            preview_data=preview,
+            all_columns=all_columns,
+            columns_missing_values=columns_missing_values,
+            invalid_dates_count=invalid_dates_count,
+            inconsistent_slots_count=inconsistent_slots_count,
+            pricing_inconsistencies_count=pricing_inconsistencies_count,
+            booking_patterns_summary=booking_patterns_summary,
+            seasonal_behaviour_summary=seasonal_behaviour_summary,
+            owner_pricing_behaviour_summary=owner_pricing_behaviour_summary
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Validation failed: {str(e)}")

@@ -166,6 +166,31 @@ class DataPipeline:
         return df
 
     @classmethod
+    def normalize_commercial_slot(cls, slot_val: Any) -> str:
+        s = str(slot_val).upper().strip().replace(" ", "_")
+        if "12H_DAY" in s or "12_HR_DAY" in s or "12_HOUR_DAY" in s or "HALF_DAY" in s or "DAY_SLOT" in s:
+            return "12H_DAY"
+        if "12H_NIGHT" in s or "12_HR_NIGHT" in s or "12_HOUR_NIGHT" in s or "NIGHT_SLOT" in s:
+            return "12H_NIGHT"
+        if "24H_DAY" in s or "24_HR_DAY" in s or "24_HOUR_DAY" in s or "24H_FULL" in s:
+            return "24H_DAY"
+        if "24H_NIGHT" in s or "24_HR_NIGHT" in s or "24_HOUR_NIGHT" in s:
+            return "24H_NIGHT"
+        if "COUPLE_DAY" in s:
+            return "COUPLE_DAY"
+        if "COUPLE_NIGHT" in s:
+            return "COUPLE_NIGHT"
+        if "COUPLE" in s or "6H_COUPLE" in s or "COUPLE_SLOT" in s:
+            return "COUPLE_SLOT"
+        if "WEDDING" in s:
+            return "WEDDING_EVENT"
+        if "CORPORATE" in s:
+            return "CORPORATE_EVENT"
+        if "POOL" in s:
+            return "POOL_PARTY"
+        return s
+
+    @classmethod
     def process_with_explicit_mapping(
         cls,
         file_path: Path,
@@ -195,11 +220,27 @@ class DataPipeline:
         mapped_df["booking_date"] = pd.to_datetime(df[date_col], errors="coerce").dt.strftime("%Y-%m-%d")
         mapped_df["booking_date"] = mapped_df["booking_date"].fillna(date.today().strftime("%Y-%m-%d"))
 
-        # 3. Commercial Slot (Normalize spaces to underscores and uppercase)
+        # 3. Commercial Slot Standardisation & Duration-based Inference (Phase 2 & 4)
         if slot_col and slot_col in df.columns:
-            mapped_df["commercial_slot"] = df[slot_col].astype(str).str.upper().str.strip().str.replace(" ", "_")
+            mapped_df["commercial_slot"] = df[slot_col].apply(cls.normalize_commercial_slot)
         else:
-            mapped_df["commercial_slot"] = "12H_DAY"
+            # Auto-infer from duration columns if available
+            dur_col = next((c for c in df.columns if any(k in str(c).lower() for k in ["duration", "hours", "stay"])), None)
+            guests_series = pd.to_numeric(df[guests_col], errors="coerce").fillna(4) if guests_col and guests_col in df.columns else pd.Series([4] * len(df))
+            
+            if dur_col:
+                durations = pd.to_numeric(df[dur_col], errors="coerce").fillna(12.0)
+                inferred_slots = []
+                for d, g in zip(durations, guests_series):
+                    if g <= 2:
+                        inferred_slots.append("COUPLE_SLOT")
+                    elif d <= 12:
+                        inferred_slots.append("12H_DAY")
+                    else:
+                        inferred_slots.append("24H_DAY")
+                mapped_df["commercial_slot"] = inferred_slots
+            else:
+                mapped_df["commercial_slot"] = "12H_DAY"
 
         # 4. Guest Count
         if guests_col and guests_col in df.columns:

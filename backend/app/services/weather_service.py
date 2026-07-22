@@ -39,6 +39,7 @@ class WeatherService:
                         main = best_match.get("main", {})
                         weather_arr = best_match.get("weather", [{}])
                         wind = best_match.get("wind", {})
+                        clouds = best_match.get("clouds", {})
                         pop = best_match.get("pop", 0.0) * 100
                         
                         return {
@@ -46,6 +47,7 @@ class WeatherService:
                             "rain_probability": round(pop, 1),
                             "humidity": round(main.get("humidity", 65.0), 1),
                             "wind_speed": round(wind.get("speed", 3.5), 1),
+                            "cloud_cover": round(float(clouds.get("all", 20.0)), 1),
                             "condition": weather_arr[0].get("main", "Clear"),
                             "source": f"OpenWeather API (Live Day +{days_diff})"
                         }
@@ -65,21 +67,25 @@ class WeatherService:
             temp = 24.5 + (month % 3) * 1.2
             rain_prob = 75.0 if month in [7, 8] else 50.0
             humidity = 85.0
+            cloud_cover = 80.0 if month in [7, 8] else 60.0
             condition = "Heavy Rain" if month in [7, 8] else "Moderate Rain"
         elif month in [11, 12, 1, 2]:
             temp = 21.0 + (month % 2) * 2.0
             rain_prob = 5.0
             humidity = 45.0
+            cloud_cover = 15.0
             condition = "Pleasant / Clear"
         elif 3 <= month <= 5:
             temp = 32.0 + (month - 3) * 2.5
             rain_prob = 10.0
             humidity = 55.0
+            cloud_cover = 10.0
             condition = "Sunny / Warm"
         else:
             temp = 27.5
             rain_prob = 20.0
             humidity = 60.0
+            cloud_cover = 25.0
             condition = "Clear Sky"
 
         return {
@@ -87,6 +93,7 @@ class WeatherService:
             "rain_probability": round(rain_prob, 1),
             "humidity": round(humidity, 1),
             "wind_speed": 4.2,
+            "cloud_cover": round(cloud_cover, 1),
             "condition": condition,
             "source": "Seasonal Weather Model (Fallback)"
         }

@@ -1,4 +1,5 @@
 import pandas as pd
+import json
 import numpy as np
 from datetime import datetime, date
 from pathlib import Path
@@ -72,9 +73,132 @@ def safe_float(val: Any, default: float = 0.0) -> float:
     except Exception:
         return default
 
+class BusinessInsightDiscoverer:
+    @classmethod
+    def discover_and_save_insights(cls, df: pd.DataFrame):
+        """
+        Phase 5: Automatically discover business insights from historical bookings
+        and save them to be used as engineered features.
+        """
+        try:
+            df = df.copy()
+            if "booking_date" in df.columns:
+                df["dt"] = pd.to_datetime(df["booking_date"], errors="coerce")
+                df["m"] = df["dt"].dt.month
+                df["wday"] = df["dt"].dt.weekday
+            else:
+                df["m"] = 7
+                df["wday"] = 5
+                
+            p_col = "selling_price" if "selling_price" in df.columns else "price"
+            df[p_col] = pd.to_numeric(df[p_col], errors="coerce").fillna(0.0)
+            
+            # 1. Highest revenue weekday and month
+            revenue_by_wday = df.groupby("wday")[p_col].sum()
+            highest_revenue_weekday = int(revenue_by_wday.idxmax()) if not revenue_by_wday.empty else 6
+            
+            revenue_by_month = df.groupby("m")[p_col].sum()
+            highest_revenue_month = int(revenue_by_month.idxmax()) if not revenue_by_month.empty else 5
+            
+            # 2. Most and least booked slot
+            slot_counts = df["commercial_slot"].value_counts() if "commercial_slot" in df.columns else pd.Series()
+            most_booked_slot = str(slot_counts.idxmax()) if not slot_counts.empty else "12H_DAY"
+            least_booked_slot = str(slot_counts.idxmin()) if not slot_counts.empty else "COUPLE_NIGHT"
+            
+            # 3. Weekend premium ratio
+            wk_prices = df[df["is_weekend"] == 1][p_col] if "is_weekend" in df.columns else pd.Series()
+            wd_prices = df[df["is_weekend"] == 0][p_col] if "is_weekend" in df.columns else pd.Series()
+            wk_avg = wk_prices.mean() if not wk_prices.empty else 4000.0
+            wd_avg = wd_prices.mean() if not wd_prices.empty else 3000.0
+            weekend_premium_ratio = round(float(wk_avg / wd_avg), 3) if wd_avg > 0 else 1.25
+            
+            # 4. Summer and winter demand ratio vs monsoon
+            ms_prices = df[df["month"].isin([6, 7, 8, 9])][p_col] if "month" in df.columns else pd.Series()
+            sm_prices = df[df["month"].isin([3, 4, 5])][p_col] if "month" in df.columns else pd.Series()
+            wt_prices = df[df["month"].isin([10, 11, 12, 1, 2])][p_col] if "month" in df.columns else pd.Series()
+            ms_avg = ms_prices.mean() if not ms_prices.empty else 3000.0
+            sm_avg = sm_prices.mean() if not sm_prices.empty else 3600.0
+            wt_avg = wt_prices.mean() if not wt_prices.empty else 3200.0
+            
+            summer_demand_ratio = round(float(sm_avg / ms_avg), 3) if ms_avg > 0 else 1.20
+            winter_demand_ratio = round(float(wt_avg / ms_avg), 3) if ms_avg > 0 else 1.05
+            
+            # 5. Rain impact ratio
+            rainy_prices = df[df["rain_probability"] > 50.0][p_col] if "rain_probability" in df.columns else pd.Series()
+            sunny_prices = df[df["rain_probability"] <= 50.0][p_col] if "rain_probability" in df.columns else pd.Series()
+            rainy_avg = rainy_prices.mean() if not rainy_prices.empty else 2800.0
+            sunny_avg = sunny_prices.mean() if not sunny_prices.empty else 3500.0
+            rain_impact_ratio = round(float(rainy_avg / sunny_avg), 3) if sunny_avg > 0 else 0.85
+            
+            # 6. Lead time effect
+            adv_prices = df[df["lead_days"] > 14][p_col] if "lead_days" in df.columns else pd.Series()
+            last_prices = df[df["lead_days"] <= 14][p_col] if "lead_days" in df.columns else pd.Series()
+            adv_avg = adv_prices.mean() if not adv_prices.empty else 3800.0
+            last_avg = last_prices.mean() if not last_prices.empty else 3400.0
+            advance_booking_ratio = round(float(adv_avg / last_avg), 3) if last_avg > 0 else 1.10
+            
+            # 7. Occupancy ratio
+            occupancy = 0.65
+            if "occupancy_ratio" in df.columns:
+                occupancy = df["occupancy_ratio"].mean()
+            elif "occupancy_rate" in df.columns:
+                occupancy = df["occupancy_rate"].mean()
+            
+            insights = {
+                "highest_revenue_weekday": highest_revenue_weekday,
+                "highest_revenue_month": highest_revenue_month,
+                "most_booked_slot": most_booked_slot,
+                "least_booked_slot": least_booked_slot,
+                "weekend_premium_ratio": weekend_premium_ratio,
+                "summer_demand_ratio": summer_demand_ratio,
+                "winter_demand_ratio": winter_demand_ratio,
+                "rain_impact_ratio": rain_impact_ratio,
+                "advance_booking_ratio": advance_booking_ratio,
+                "average_occupancy": round(float(occupancy), 3)
+            }
+            
+            insights_path = DATA_DIR / "business_insights.json"
+            with open(insights_path, "w") as f:
+                json.dump(insights, f, indent=2)
+            print(f"📊 [INSIGHT DISCOVERY] Automatically discovered and saved business insights: {list(insights.keys())}")
+            
+            # Force reload in FeatureEngineer cache
+            FeatureEngineer._insights = insights
+        except Exception as ex:
+            print(f"⚠️ Error discovering business insights: {ex}")
+
 class FeatureEngineer:
-    @staticmethod
-    def extract_features_from_dict(row: Dict[str, Any]) -> Dict[str, Any]:
+    _insights = None
+
+    @classmethod
+    def _load_insights(cls) -> Dict[str, Any]:
+        if cls._insights is not None:
+            return cls._insights
+        
+        insights_path = DATA_DIR / "business_insights.json"
+        if insights_path.exists():
+            try:
+                with open(insights_path, "r") as f:
+                    cls._insights = json.load(f)
+                    return cls._insights
+            except Exception:
+                pass
+                
+        # Default fallback values if no file exists
+        cls._insights = {
+            "highest_revenue_month": 5,
+            "highest_revenue_weekday": 6,
+            "weekend_premium_ratio": 1.25,
+            "summer_demand_ratio": 1.2,
+            "winter_demand_ratio": 1.0,
+            "rain_impact_ratio": 0.85,
+            "advance_booking_ratio": 1.1,
+            "average_occupancy": 0.65
+        }
+        return cls._insights
+
+    @classmethod
+    def extract_features_from_dict(cls, row: Dict[str, Any]) -> Dict[str, Any]:
         """
         Extracts engineered feature dictionary for a single booking request or record.
         Includes Couple Discount (2 guests consume less electricity/water) & auto lead days calculation.
@@ -204,15 +328,34 @@ class FeatureEngineer:
         temp = safe_float(row.get("temperature"), 26.0)
         rain_prob = safe_float(row.get("rain_probability"), 20.0)
         humidity = safe_float(row.get("humidity"), 60.0)
+        wind_speed = safe_float(row.get("wind_speed"), 4.2)
+        cloud_cover = safe_float(row.get("cloud_cover"), 25.0)
 
-        demand_score = 50.0
-        if is_weekend: demand_score += 20.0
-        if is_festival: demand_score += 25.0
-        if is_festival_eve: demand_score += 15.0
-        if is_vacation: demand_score += 10.0
-        if lead_days <= 2: demand_score += 10.0
-        if is_couple: demand_score -= 15.0
-        demand_score = min(100.0, max(10.0, demand_score))
+        # Dynamic Demand & Insights engineering (Phase 5 & 6)
+        insights = cls._load_insights()
+        weekend_premium = insights.get("weekend_premium_ratio", 1.25)
+        summer_demand_ratio = insights.get("summer_demand_ratio", 1.2)
+        winter_demand_ratio = insights.get("winter_demand_ratio", 1.0)
+        rain_impact_ratio = insights.get("rain_impact_ratio", 0.85)
+
+        base_demand = 50.0
+        if is_weekend:
+            base_demand *= weekend_premium
+        if season == "Summer":
+            base_demand *= summer_demand_ratio
+        elif season == "Winter":
+            base_demand *= winter_demand_ratio
+        if temp > 33.0 or rain_prob > 50.0:
+            base_demand *= rain_impact_ratio
+            
+        demand_score = min(100.0, max(10.0, base_demand))
+
+        # Business Confidence Score
+        business_confidence_score = 90.0
+        if lead_days > 14:
+            business_confidence_score = 95.0
+        elif lead_days < 2:
+            business_confidence_score = 75.0
 
         slot_code = str(row.get("commercial_slot", "12H_DAY")).upper().strip().replace(" ", "_")
         slot_capacity_hours = 24.0 if "24H" in slot_code else 12.0
@@ -222,6 +365,11 @@ class FeatureEngineer:
 
         slot_utilization_ratio = min(1.0, max(0.1, duration_hours / slot_capacity_hours))
         opportunity_cost_factor = float(np.round(max(0.90, 0.90 + 0.10 * slot_utilization_ratio), 4))
+
+        competitor_diff = 0.0
+        if competitor_price > 0:
+            # We will approximate this or compute directly
+            competitor_diff = competitor_price - 8500.0 # baseline offset
 
         return {
             "booking_date": dt.strftime("%Y-%m-%d"),
@@ -260,10 +408,20 @@ class FeatureEngineer:
             "lead_time_bucket": lead_time_bucket,
             "lead_time_cat": lead_time_cat,
             "competitor_price": competitor_price,
+            "competitor_diff": competitor_diff,
             "temperature": temp,
             "rain_probability": rain_prob,
             "humidity": humidity,
-            "demand_score": demand_score
+            "wind_speed": wind_speed,
+            "cloud_cover": cloud_cover,
+            "demand_score": demand_score,
+            "business_confidence_score": business_confidence_score,
+            "highest_revenue_weekday": insights.get("highest_revenue_weekday", 6),
+            "highest_revenue_month": insights.get("highest_revenue_month", 5),
+            "weekend_premium_ratio": weekend_premium,
+            "summer_demand_ratio": summer_demand_ratio,
+            "winter_demand_ratio": winter_demand_ratio,
+            "rain_impact_ratio": rain_impact_ratio
         }
 
     @staticmethod
@@ -330,6 +488,10 @@ class FeatureEngineer:
         for col_to_drop in ["month", "year", "day_of_week"]:
             if col_to_drop in df.columns:
                 df.drop(columns=[col_to_drop], inplace=True)
+
+        # Automatically discover business insights before extracting row features (Phase 5)
+        if len(df) > 5:
+            BusinessInsightDiscoverer.discover_and_save_insights(df)
 
         features_list = [FeatureEngineer.extract_features_from_dict(row.to_dict()) for _, row in df.iterrows()]
         features_df = pd.DataFrame(features_list)

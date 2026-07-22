@@ -27,6 +27,15 @@ class ValidationReportResponse(BaseModel):
     date_end: str
     slot_distribution: Dict[str, int]
     preview_data: List[Dict[str, Any]]
+    # Phase 1 Data Quality Report fields
+    all_columns: Optional[List[str]] = Field(default_factory=list)
+    columns_missing_values: Optional[Dict[str, int]] = Field(default_factory=dict)
+    invalid_dates_count: Optional[int] = 0
+    inconsistent_slots_count: Optional[int] = 0
+    pricing_inconsistencies_count: Optional[int] = 0
+    booking_patterns_summary: Optional[str] = "No distinct patterns detected."
+    seasonal_behaviour_summary: Optional[str] = "No strong seasonal shifts detected."
+    owner_pricing_behaviour_summary: Optional[str] = "Standard owner pricing behaviour."
 
 class PredictionRequest(BaseModel):
     start_datetime: Optional[str] = Field(None, example="2025-10-22 19:00", description="Booking Start Date & Time")

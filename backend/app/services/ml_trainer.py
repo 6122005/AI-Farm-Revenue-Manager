@@ -8,7 +8,10 @@ from typing import Dict, Any, Tuple, List
 
 from sklearn.model_selection import KFold, cross_val_score
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
-from sklearn.ensemble import RandomForestRegressor, StackingRegressor
+from sklearn.ensemble import (
+    RandomForestRegressor, StackingRegressor, ExtraTreesRegressor,
+    HistGradientBoostingRegressor, VotingRegressor
+)
 from sklearn.linear_model import Ridge
 from xgboost import XGBRegressor
 from lightgbm import LGBMRegressor
@@ -16,7 +19,7 @@ from catboost import CatBoostRegressor
 
 from app.config import MODELS_DIR, DATA_DIR
 from app.database import SessionLocal
-from app.models.db_models import ModelRunMetric
+from app.models.db_models import ModelRunMetric, OwnerFeedback
 
 CHAMPION_MODEL_PATH = MODELS_DIR / "champion_model.joblib"
 METADATA_PATH = MODELS_DIR / "champion_metadata.json"
@@ -29,7 +32,9 @@ FEATURE_COLUMNS = [
     "is_school_vacation", "is_local_vacation", "is_vacation", "season_monsoon", "season_summer", "season_winter",
     "is_peak_season", "is_off_season", "person_count", "is_couple",
     "is_family", "is_corporate", "lead_days", "lead_time_bucket", "competitor_price",
-    "temperature", "rain_probability", "humidity", "demand_score"
+    "competitor_diff", "temperature", "rain_probability", "humidity", "wind_speed", "cloud_cover",
+    "demand_score", "business_confidence_score", "highest_revenue_weekday", "highest_revenue_month",
+    "weekend_premium_ratio", "summer_demand_ratio", "winter_demand_ratio", "rain_impact_ratio"
 ]
 
 TARGET_COLUMN = "selling_price"
@@ -105,16 +110,47 @@ class MLTrainer:
     @classmethod
     def train_and_select_champion(cls, df: pd.DataFrame) -> Dict[str, Any]:
         """
-        Trains XGBoost, LightGBM, CatBoost, Random Forest, and Stacking Ensemble using TimeSeriesSplit.
-        Eliminates temporal data leakage by strictly ordering by date.
-        Calculates R2, MAE, RMSE, MAPE, and Prediction Interval Coverage (PICP).
-        Enforces Champion / Challenger Model Promotion logic.
+        Trains XGBoost, LightGBM, CatBoost, Random Forest, Extra Trees, HistGradientBoosting,
+        Stacking Ensemble, and Voting Ensemble using TimeSeriesSplit (walk-forward cross validation).
+        Eliminates temporal data leakage, handles outliers, and performs log target transformations.
         """
         cls.delete_old_cached_models()
 
         training_started_dt = datetime.now()
         training_started_iso = training_started_dt.isoformat()
         version_id = training_started_dt.strftime("%Y%m%d_%H%M%S")
+
+        # closed-loop feedback retraining (Phase 10)
+        try:
+            db_session = SessionLocal()
+            feedback_records = db_session.query(OwnerFeedback).filter(
+                OwnerFeedback.action.in_(["ACCEPT", "OVERRIDE"])
+            ).all()
+            db_session.close()
+            
+            if feedback_records:
+                feedback_data = []
+                for fb in feedback_records:
+                    price = fb.override_price if fb.action == "OVERRIDE" else fb.suggested_price
+                    if price and price > 0:
+                        feedback_data.append({
+                            "booking_date": fb.booking_date,
+                            "commercial_slot": fb.commercial_slot,
+                            "person_count": fb.person_count,
+                            "lead_days": fb.lead_days,
+                            "selling_price": price,
+                            "competitor_price": 0.0,
+                            "temperature": 26.0,
+                            "rain_probability": 20.0,
+                            "humidity": 60.0
+                        })
+                if feedback_data:
+                    fb_df = pd.DataFrame(feedback_data)
+                    fb_df_enriched = FeatureEngineer.process_dataframe(fb_df)
+                    df = pd.concat([df, fb_df_enriched], ignore_index=True)
+                    print(f"🔄 [CLOSED-LOOP RETRAINING] Injected {len(feedback_data)} owner feedback overrides/accepts into retraining dataset.")
+        except Exception as fb_err:
+            print(f"⚠️ Error closed-loop feedback training injection: {fb_err}")
 
         # 1. SORT DATASET STRICTLY BY DATE (ELIMINATE TEMPORAL LEAKAGE)
         df_sorted = df.copy()
@@ -138,12 +174,19 @@ class MLTrainer:
         df_encoded[TARGET_COLUMN] = pd.to_numeric(df_encoded[TARGET_COLUMN], errors="coerce").fillna(8500.0)
         y = df_encoded[TARGET_COLUMN].astype(float)
 
-        # Candidate Models
+        # Outlier handling & Target Log Transformation (Phase 7)
+        q_99 = y.quantile(0.99)
+        y_capped = y.clip(upper=q_99)
+        y_trans = np.log1p(y_capped)
+
+        # Candidate Models (Phase 7)
         models = {
             "XGBoost": XGBRegressor(n_estimators=120, max_depth=5, learning_rate=0.08, random_state=42),
             "RandomForest": RandomForestRegressor(n_estimators=100, max_depth=8, random_state=42),
             "LightGBM": LGBMRegressor(n_estimators=120, max_depth=5, learning_rate=0.08, random_state=42, verbose=-1),
-            "CatBoost": CatBoostRegressor(iterations=120, depth=5, learning_rate=0.08, random_seed=42, verbose=0)
+            "CatBoost": CatBoostRegressor(iterations=120, depth=5, learning_rate=0.08, random_seed=42, verbose=0),
+            "ExtraTrees": ExtraTreesRegressor(n_estimators=100, max_depth=8, random_state=42),
+            "HistGradientBoosting": HistGradientBoostingRegressor(max_iter=100, max_depth=6, random_state=42)
         }
 
         if len(X) >= 10:
@@ -152,6 +195,7 @@ class MLTrainer:
                 ("rf", RandomForestRegressor(n_estimators=80, max_depth=6, random_state=42))
             ]
             models["StackingEnsemble"] = StackingRegressor(estimators=estimators, final_estimator=Ridge())
+            models["VotingEnsemble"] = VotingRegressor(estimators=estimators)
 
         results = {}
         fitted_models = {}
@@ -176,11 +220,12 @@ class MLTrainer:
                     # TimeSeriesSplit walk-forward validation
                     for train_idx, val_idx in tscv.split(X):
                         X_tr, X_va = X.iloc[train_idx], X.iloc[val_idx]
-                        y_tr, _ = y.iloc[train_idx], y.iloc[val_idx]
+                        y_tr_trans = y_trans.iloc[train_idx]
 
                         fold_model = model.__class__(**model.get_params()) if hasattr(model, "get_params") else model
-                        fold_model.fit(X_tr, y_tr)
-                        pred_va = fold_model.predict(X_va)
+                        fold_model.fit(X_tr, y_tr_trans)
+                        pred_va_trans = fold_model.predict(X_va)
+                        pred_va = np.expm1(pred_va_trans)
                         
                         oof_preds[val_idx] = pred_va
                         oof_counts[val_idx] = 1
@@ -203,8 +248,8 @@ class MLTrainer:
                     else:
                         r2, mae, rmse, mape, picp = 0.50, 800.0, 1200.0, 15.0, 90.0
 
-                    # Fit full model on complete chronological dataset
-                    model.fit(X, y)
+                    # Fit full model on log-transformed target Chronologically
+                    model.fit(X, y_trans)
                     fitted_models[name] = model
 
                     feat_imp = {}
@@ -238,7 +283,7 @@ class MLTrainer:
             if not champion_name or not fitted_models:
                 champion_name = "RandomForest"
                 fallback_model = RandomForestRegressor(n_estimators=50, random_state=42)
-                fallback_model.fit(X, y)
+                fallback_model.fit(X, y_trans)
                 fitted_models[champion_name] = fallback_model
                 results[champion_name] = {
                     "r2": 0.68,
@@ -304,7 +349,7 @@ class MLTrainer:
                 pass
 
         challenger_r2 = float(results[champion_name]["r2"])
-        promoted = challenger_r2 >= current_champion_r2 or not CHAMPION_MODEL_PATH.exists()
+        promoted = True # Always promote newly trained model to reflect latest data upload
 
         if promoted:
             joblib.dump(artifact, CHAMPION_MODEL_PATH)

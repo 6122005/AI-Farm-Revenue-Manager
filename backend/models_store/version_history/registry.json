@@ -1,5 +1,194 @@
 [
   {
+    "version_id": "20260722_104926",
+    "champion_name": "RandomForest",
+    "promoted": true,
+    "metrics": {
+      "r2": 0.5322599217209469,
+      "mae": 1019.3337493989662,
+      "rmse": 1823.6527435113562,
+      "mape": 36.654537544300766,
+      "prediction_interval_coverage": 89.91869918699187,
+      "validation_strategy": "TimeSeriesSplit(n_splits=5)",
+      "feature_importances": {
+        "commercial_slot_24H_NIGHT": 0.4872413986718479,
+        "day_of_year": 0.11197402598036565,
+        "demand_score": 0.08066465009705803,
+        "day_of_week": 0.06245737903131425,
+        "week_of_year": 0.061185913380977903,
+        "days_before_festival": 0.03300738509584099,
+        "days_after_festival": 0.03208393955403434,
+        "season_summer": 0.02156824543002689,
+        "commercial_slot_24H_DAY": 0.01632016199547421,
+        "commercial_slot_COUPLE_DAY": 0.013378567457765191
+      }
+    },
+    "trained_at": "2026-07-22T10:49:30.987389",
+    "artifact_path": "/home/ebl-01/Desktop/farm/backend/models_store/version_history/model_20260722_104926.joblib"
+  },
+  {
+    "version_id": "20260722_104908",
+    "champion_name": "RandomForest",
+    "promoted": true,
+    "metrics": {
+      "r2": 0.9828368950701751,
+      "mae": 584.3437542695941,
+      "rmse": 768.0193453696379,
+      "mape": 6.789068822936422,
+      "prediction_interval_coverage": 89.60000000000001,
+      "validation_strategy": "TimeSeriesSplit(n_splits=5)",
+      "feature_importances": {
+        "competitor_diff": 0.2971539239195968,
+        "is_couple": 0.267291039753172,
+        "competitor_price": 0.2637959726180707,
+        "person_count": 0.16614830011808632,
+        "commercial_slot_COUPLE_DAY": 0.0006038260550173476,
+        "day_of_year": 0.0005723920852720579,
+        "demand_score": 0.0005431014710154432,
+        "day_of_week": 0.0005195552165198065,
+        "lead_days": 0.00045878001504775915,
+        "week_of_year": 0.00035564536452481254
+      }
+    },
+    "trained_at": "2026-07-22T10:49:11.558251",
+    "artifact_path": "/home/ebl-01/Desktop/farm/backend/models_store/version_history/model_20260722_104908.joblib"
+  },
+  {
+    "version_id": "20260722_104829",
+    "champion_name": "RandomForest",
+    "promoted": false,
+    "metrics": {
+      "r2": 0.5322599217209469,
+      "mae": 1019.3337493989662,
+      "rmse": 1823.6527435113562,
+      "mape": 36.654537544300766,
+      "prediction_interval_coverage": 89.91869918699187,
+      "validation_strategy": "TimeSeriesSplit(n_splits=5)",
+      "feature_importances": {
+        "commercial_slot_24H_NIGHT": 0.4872413986718479,
+        "day_of_year": 0.11197402598036565,
+        "demand_score": 0.08066465009705803,
+        "day_of_week": 0.06245737903131425,
+        "week_of_year": 0.061185913380977903,
+        "days_before_festival": 0.03300738509584099,
+        "days_after_festival": 0.03208393955403434,
+        "season_summer": 0.02156824543002689,
+        "commercial_slot_24H_DAY": 0.01632016199547421,
+        "commercial_slot_COUPLE_DAY": 0.013378567457765191
+      }
+    },
+    "trained_at": "2026-07-22T10:48:34.403201",
+    "artifact_path": "/home/ebl-01/Desktop/farm/backend/models_store/version_history/model_20260722_104829.joblib"
+  },
+  {
+    "version_id": "20260722_104602",
+    "champion_name": "RandomForest",
+    "promoted": true,
+    "metrics": {
+      "r2": 0.9828368950701751,
+      "mae": 584.3437542695941,
+      "rmse": 768.0193453696379,
+      "mape": 6.789068822936422,
+      "prediction_interval_coverage": 89.60000000000001,
+      "validation_strategy": "TimeSeriesSplit(n_splits=5)",
+      "feature_importances": {
+        "competitor_diff": 0.2971539239195968,
+        "is_couple": 0.267291039753172,
+        "competitor_price": 0.2637959726180707,
+        "person_count": 0.16614830011808632,
+        "commercial_slot_COUPLE_DAY": 0.0006038260550173476,
+        "day_of_year": 0.0005723920852720579,
+        "demand_score": 0.0005431014710154432,
+        "day_of_week": 0.0005195552165198065,
+        "lead_days": 0.00045878001504775915,
+        "week_of_year": 0.00035564536452481254
+      }
+    },
+    "trained_at": "2026-07-22T10:46:06.230164",
+    "artifact_path": "/home/ebl-01/Desktop/farm/backend/models_store/version_history/model_20260722_104602.joblib"
+  },
+  {
+    "version_id": "20260722_104545",
+    "champion_name": "RandomForest",
+    "promoted": true,
+    "metrics": {
+      "r2": 0.9828368950701751,
+      "mae": 584.3437542695941,
+      "rmse": 768.0193453696379,
+      "mape": 6.789068822936422,
+      "prediction_interval_coverage": 89.60000000000001,
+      "validation_strategy": "TimeSeriesSplit(n_splits=5)",
+      "feature_importances": {
+        "competitor_diff": 0.2971539239195968,
+        "is_couple": 0.267291039753172,
+        "competitor_price": 0.2637959726180707,
+        "person_count": 0.16614830011808632,
+        "commercial_slot_COUPLE_DAY": 0.0006038260550173476,
+        "day_of_year": 0.0005723920852720579,
+        "demand_score": 0.0005431014710154432,
+        "day_of_week": 0.0005195552165198065,
+        "lead_days": 0.00045878001504775915,
+        "week_of_year": 0.00035564536452481254
+      }
+    },
+    "trained_at": "2026-07-22T10:45:48.958580",
+    "artifact_path": "/home/ebl-01/Desktop/farm/backend/models_store/version_history/model_20260722_104545.joblib"
+  },
+  {
+    "version_id": "20260722_104233",
+    "champion_name": "RandomForest",
+    "promoted": true,
+    "metrics": {
+      "r2": 0.9820387955440417,
+      "mae": 585.1519548899056,
+      "rmse": 785.6732356168694,
+      "mape": 7.197018731897425,
+      "prediction_interval_coverage": 89.60000000000001,
+      "validation_strategy": "TimeSeriesSplit(n_splits=5)",
+      "feature_importances": {
+        "competitor_price": 0.8925562910970498,
+        "is_couple": 0.056117846298672294,
+        "person_count": 0.04594993494559369,
+        "demand_score": 0.0007368160294958052,
+        "day_of_year": 0.000619122494631448,
+        "day_of_week": 0.0005895840308799262,
+        "lead_days": 0.000559345528748883,
+        "days_after_festival": 0.00039820520653985624,
+        "week_of_year": 0.000379011015857046,
+        "month": 0.00023472155113794918
+      }
+    },
+    "trained_at": "2026-07-22T10:42:34.973295",
+    "artifact_path": "/home/ebl-01/Desktop/farm/backend/models_store/version_history/model_20260722_104233.joblib"
+  },
+  {
+    "version_id": "20260722_102339",
+    "champion_name": "LightGBM",
+    "promoted": true,
+    "metrics": {
+      "r2": 0.45706810791318364,
+      "mae": 1269.8928517622164,
+      "rmse": 2005.1258629644308,
+      "mape": 45.70321881297158,
+      "prediction_interval_coverage": 89.91869918699187,
+      "validation_strategy": "TimeSeriesSplit(n_splits=5)",
+      "feature_importances": {
+        "day_of_year": 265.0,
+        "lead_days": 248.0,
+        "person_count": 164.0,
+        "week_of_year": 148.0,
+        "day_of_week": 139.0,
+        "days_before_festival": 113.0,
+        "days_after_festival": 113.0,
+        "demand_score": 105.0,
+        "commercial_slot_COUPLE_DAY": 48.0,
+        "is_consecutive_holiday": 41.0
+      }
+    },
+    "trained_at": "2026-07-22T10:23:42.889496",
+    "artifact_path": "/home/ebl-01/Desktop/farm/backend/models_store/version_history/model_20260722_102339.joblib"
+  },
+  {
     "version_id": "20260722_093424",
     "champion_name": "LightGBM",
     "promoted": true,

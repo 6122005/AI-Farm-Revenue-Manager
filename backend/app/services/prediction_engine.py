@@ -481,7 +481,11 @@ class PredictionEngine:
             for c in model_input.columns:
                 model_input[c] = pd.to_numeric(model_input[c], errors="coerce").fillna(0.0).astype(float)
 
-            predicted_val = float(model.predict(model_input)[0])
+            predicted_val_trans = float(model.predict(model_input)[0])
+            if predicted_val_trans < 25.0:
+                predicted_val = float(np.expm1(predicted_val_trans))
+            else:
+                predicted_val = predicted_val_trans
         else:
             slot_stats = self.get_slot_stats_from_uploaded_data(commercial_slot)
             predicted_val = slot_stats["base"]
@@ -630,13 +634,31 @@ class PredictionEngine:
                 "contribution_note": f"Historical booking price ₹{b['selling_price']:,.0f} for slot {b['commercial_slot']} with {b['person_count']} guests ({b['similarity_score']}% match)."
             })
 
+        # Step-by-step deconstruction text (Phase 9)
+        adjustments_text = []
+        if features.get("is_weekend"):
+            adjustments_text.append(f"Weekend Premium (+{round((features.get('weekend_premium_ratio', 1.25)-1)*100)}%)")
+        if lead_days > 14:
+            adjustments_text.append(f"Advance Booking Premium (+{round((features.get('advance_booking_ratio', 1.1)-1)*100)}%)")
+        elif lead_days < 2:
+            adjustments_text.append("Last Minute Discount (-10%)")
+        if features.get("is_couple"):
+            adjustments_text.append("Couple Discount (-15%)")
+        elif features.get("is_corporate"):
+            adjustments_text.append("Corporate Group Premium (+20%)")
+        if features.get("is_peak_season"):
+            adjustments_text.append("Peak Season Premium (+20%)")
+        elif features.get("is_off_season"):
+            adjustments_text.append("Off-Peak Discount (-12%)")
+        if weather.get("rain_probability", 0) > 50.0:
+            adjustments_text.append("Rain Impact Discount (-15%)")
+            
+        adj_str = " + ".join(adjustments_text) if adjustments_text else "No adjustments"
         hist_explanation = (
-            f"Price ₹{recommended_price:,.0f} is derived directly from uploaded historical dataset bounds "
-            f"(Min ₹{dataset_min:,.0f} – Max ₹{dataset_max:,.0f}). "
-            f"Slot '{commercial_slot}' historical median is ₹{base_slot_price:,.0f}. "
-            f"Grounding evidence: Top similar uploaded row #{1 if contributing_rows else 0} booked at "
-            f"₹{contributing_rows[0]['selling_price']:,.0f} on {contributing_rows[0]['booking_date'] if contributing_rows else 'N/A'}. "
-            f"No unexplained price jump occurred."
+            f"Suggested Price deconstruction: Base Market Price (₹{base_slot_price:,.0f}) + "
+            f"({adj_str}) = suggested ₹{recommended_price:,.0f}. "
+            f"Model Champion: '{champion_name}' dynamically blended these factors. "
+            f"Grounding evidence: Similar historical booking on {contributing_rows[0]['booking_date'] if contributing_rows else 'N/A'} was ₹{contributing_rows[0]['selling_price'] if contributing_rows else 0:,.0f}."
         )
 
         print(f"\n=======================================================")

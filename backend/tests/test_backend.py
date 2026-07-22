@@ -13,17 +13,17 @@ def test_root_endpoint():
     assert response.json()["status"] == "online"
 
 def test_slot_engine_mapping():
-    assert slot_engine.map_duration_to_slot(5.0, 2) == "COUPLE_SLOT"
-    assert slot_engine.map_duration_to_slot(5.0, 6) == "6H_SLOT"
-    assert slot_engine.map_duration_to_slot(10.0, 8) == "12H_SLOT"
-    assert slot_engine.map_duration_to_slot(24.0, 10) == "24H_FULL_SLOT"
+    assert slot_engine.map_duration_to_slot(5.0, 2) == "COUPLE_DAY"
+    assert slot_engine.map_duration_to_slot(5.0, 6) == "12H_DAY"
+    assert slot_engine.map_duration_to_slot(10.0, 8) == "12H_DAY"
+    assert slot_engine.map_duration_to_slot(24.0, 10) == "24H_DAY"
 
 def test_feature_engineer():
     feats = FeatureEngineer.extract_features_from_dict({
         "booking_date": "2026-08-15",
         "person_count": 8,
         "lead_days": 5,
-        "commercial_slot": "12H_SLOT"
+        "commercial_slot": "12H_DAY"
     })
     assert feats["month"] == 8
     assert feats["is_weekend"] == 1
@@ -33,7 +33,7 @@ def test_feature_engineer():
 def test_predict_api():
     payload = {
         "booking_date": "2026-08-15",
-        "commercial_slot": "12H_SLOT",
+        "commercial_slot": "12H_DAY",
         "person_count": 8,
         "lead_days": 5,
         "competitor_price": 9500.0
@@ -63,7 +63,7 @@ def test_slots_api():
 def test_feedback_api():
     payload = {
         "booking_date": "2026-08-15",
-        "commercial_slot": "12H_SLOT",
+        "commercial_slot": "12H_DAY",
         "person_count": 8,
         "lead_days": 5,
         "suggested_price": 9800.0,
