@@ -1,0 +1,110 @@
+[
+  {
+    "version_id": "20260722_093424",
+    "champion_name": "LightGBM",
+    "promoted": true,
+    "metrics": {
+      "r2": 0.48709104989132823,
+      "mae": 1090.0477871799592,
+      "rmse": 1909.6773233567205,
+      "mape": 40.48677366059438,
+      "prediction_interval_coverage": 89.91869918699187,
+      "validation_strategy": "TimeSeriesSplit(n_splits=5)",
+      "feature_importances": {
+        "month": 522.0,
+        "day_of_week": 455.0,
+        "demand_score": 172.0,
+        "commercial_slot_COUPLE_DAY": 87.0,
+        "commercial_slot_24H_NIGHT": 84.0,
+        "season_summer": 68.0,
+        "is_festival": 40.0,
+        "commercial_slot_12H_DAY": 36.0,
+        "commercial_slot_12H_NIGHT": 35.0,
+        "is_peak_season": 30.0
+      }
+    },
+    "trained_at": "2026-07-22T09:34:30.803867",
+    "artifact_path": "/home/ebl-01/Desktop/farm/backend/models_store/version_history/model_20260722_093424.joblib"
+  },
+  {
+    "version_id": "20260722_093109",
+    "champion_name": "LightGBM",
+    "promoted": false,
+    "metrics": {
+      "r2": 0.48709104989132823,
+      "mae": 1090.0477871799592,
+      "rmse": 1909.6773233567205,
+      "mape": 40.48677366059438,
+      "prediction_interval_coverage": 89.91869918699187,
+      "validation_strategy": "TimeSeriesSplit(n_splits=5)",
+      "feature_importances": {
+        "month": 522.0,
+        "day_of_week": 455.0,
+        "demand_score": 172.0,
+        "commercial_slot_COUPLE_DAY": 87.0,
+        "commercial_slot_24H_NIGHT": 84.0,
+        "season_summer": 68.0,
+        "is_festival": 40.0,
+        "commercial_slot_12H_DAY": 36.0,
+        "commercial_slot_12H_NIGHT": 35.0,
+        "is_peak_season": 30.0
+      }
+    },
+    "trained_at": "2026-07-22T09:31:29.276256",
+    "artifact_path": "/home/ebl-01/Desktop/farm/backend/models_store/version_history/model_20260722_093109.joblib"
+  },
+  {
+    "version_id": "20260721_122054",
+    "champion_name": "XGBoost",
+    "promoted": true,
+    "metrics": {
+      "r2": 0.9781466799132867,
+      "mae": 104.55556514043204,
+      "rmse": 165.078061728463,
+      "mape": 1.1674627457242823,
+      "prediction_interval_coverage": 89.6969696969697,
+      "validation_strategy": "TimeSeriesSplit(n_splits=5)",
+      "feature_importances": {
+        "contextual_avg_price": 0.6819499135017395,
+        "person_count": 0.28120288252830505,
+        "is_family": 0.009798280894756317,
+        "is_vacation": 0.009391366504132748,
+        "hist_avg_price_group_size": 0.008791287429630756,
+        "hist_avg_price_lead_time": 0.004579361528158188,
+        "contextual_median_price": 0.0022635525092482567,
+        "season_summer": 0.0009560136822983623,
+        "season_monsoon": 0.00015913449169602245,
+        "is_school_vacation": 0.00015574546705465764
+      }
+    },
+    "trained_at": "2026-07-21T12:20:58.966431",
+    "artifact_path": "/home/ebl-01/Desktop/farm/backend/models_store/version_history/model_20260721_122054.joblib"
+  },
+  {
+    "version_id": "20260721_104257",
+    "champion_name": "LightGBM",
+    "promoted": false,
+    "metrics": {
+      "r2": 0.48709104989132823,
+      "mae": 1090.0477871799592,
+      "rmse": 1909.6773233567205,
+      "mape": 40.48677366059438,
+      "prediction_interval_coverage": 89.91869918699187,
+      "validation_strategy": "TimeSeriesSplit(n_splits=5)",
+      "feature_importances": {
+        "month": 522.0,
+        "day_of_week": 455.0,
+        "demand_score": 172.0,
+        "commercial_slot_COUPLE_DAY": 87.0,
+        "commercial_slot_24H_NIGHT": 84.0,
+        "season_summer": 68.0,
+        "is_festival": 40.0,
+        "commercial_slot_12H_DAY": 36.0,
+        "commercial_slot_12H_NIGHT": 35.0,
+        "is_peak_season": 30.0
+      }
+    },
+    "trained_at": "2026-07-21T10:42:59.684392",
+    "artifact_path": "/home/ebl-01/Desktop/farm/backend/models_store/version_history/model_20260721_104257.joblib"
+  }
+]

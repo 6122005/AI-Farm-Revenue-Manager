@@ -1,0 +1,90 @@
+date,festival_name,demand_multiplier,is_eve
+2023-01-01,New Year,1.25,0
+2023-01-14,Makar Sankranti,1.25,0
+2023-01-15,Vasi Uttarayan,1.25,0
+2023-01-26,Republic Day,1.25,0
+2023-02-18,Maha Shivratri,1.25,0
+2023-03-08,Holi,1.25,0
+2023-03-09,Dhuleti,1.25,0
+2023-03-30,Ram Navami,1.25,0
+2023-04-04,Mahavir Jayanti,1.25,0
+2023-04-07,Good Friday,1.25,0
+2023-04-22,Eid-ul-Fitr,1.25,0
+2023-05-05,Buddha Purnima,1.25,0
+2023-06-29,Bakrid,1.25,0
+2023-07-29,Muharram,1.25,0
+2023-08-15,Independence Day,1.25,0
+2023-08-30,Raksha Bandhan,1.25,0
+2023-09-07,Janmashtami,1.25,0
+2023-09-19,Ganesh Chaturthi,1.25,0
+2023-10-15,Navratri Day 1,1.25,0
+2023-10-16,Navratri Day 2,1.25,0
+2023-10-17,Navratri Day 3,1.25,0
+2023-10-18,Navratri Day 4,1.25,0
+2023-10-19,Navratri Day 5,1.25,0
+2023-10-20,Navratri Day 6,1.25,0
+2023-10-21,Navratri Day 7,1.25,0
+2023-10-22,Navratri Day 8,1.25,0
+2023-10-23,Navratri Day 9,1.25,0
+2023-10-24,Dussehra,1.25,0
+2023-10-28,Sharad Purnima,1.25,0
+2023-11-10,Dhanteras,1.25,0
+2023-11-11,Kali Chaudas,1.25,0
+2023-11-12,Diwali,1.25,0
+2023-11-14,Bestu Varas,1.25,0
+2023-11-15,Bhai Beej,1.25,0
+2023-12-25,Christmas,1.25,0
+2023-12-31,New Year's Eve,1.25,1
+2024-01-01,New Year,1.25,0
+2024-01-14,Makar Sankranti,1.25,0
+2024-01-15,Vasi Uttarayan,1.25,0
+2024-01-26,Republic Day,1.25,0
+2024-03-08,Maha Shivratri,1.25,0
+2024-03-25,Holi,1.25,0
+2024-03-26,Dhuleti,1.25,0
+2024-04-11,Eid-ul-Fitr,1.25,0
+2024-04-17,Ram Navami,1.25,0
+2024-04-21,Mahavir Jayanti,1.25,0
+2024-03-29,Good Friday,1.25,0
+2024-05-23,Buddha Purnima,1.25,0
+2024-06-17,Bakrid,1.25,0
+2024-07-17,Muharram,1.25,0
+2024-08-15,Independence Day,1.25,0
+2024-08-19,Raksha Bandhan,1.25,0
+2024-08-26,Janmashtami,1.25,0
+2024-09-07,Ganesh Chaturthi,1.25,0
+2024-10-03,Navratri Day 1,1.25,0
+2024-10-12,Dussehra,1.25,0
+2024-10-16,Sharad Purnima,1.25,0
+2024-10-29,Dhanteras,1.25,0
+2024-10-31,Kali Chaudas,1.25,0
+2024-11-01,Diwali,1.25,0
+2024-11-02,Bestu Varas,1.25,0
+2024-11-03,Bhai Beej,1.25,0
+2024-12-25,Christmas,1.25,0
+2024-12-31,New Year's Eve,1.25,1
+2025-01-01,New Year,1.25,0
+2025-01-14,Makar Sankranti,1.25,0
+2025-01-26,Republic Day,1.25,0
+2025-03-14,Holi,1.25,0
+2025-03-15,Dhuleti,1.25,0
+2025-03-29,Eid-ul-Fitr,1.25,0
+2025-04-06,Ram Navami,1.25,0
+2025-08-15,Independence Day,1.25,0
+2025-08-27,Ganesh Chaturthi,1.25,0
+2025-10-20,Diwali,1.25,0
+2025-10-21,Bestu Varas,1.25,0
+2025-12-25,Christmas,1.25,0
+2025-12-31,New Year's Eve,1.25,1
+2026-01-01,New Year,1.25,0
+2026-01-14,Makar Sankranti,1.25,0
+2026-01-26,Republic Day,1.25,0
+2026-03-04,Holi,1.25,0
+2026-03-05,Dhuleti,1.25,0
+2026-03-20,Ram Navami,1.25,0
+2026-08-15,Independence Day,1.25,0
+2026-09-15,Ganesh Chaturthi,1.25,0
+2026-11-08,Diwali,1.25,0
+2026-11-09,Bestu Varas,1.25,0
+2026-12-25,Christmas,1.25,0
+2026-12-31,New Year's Eve,1.25,1

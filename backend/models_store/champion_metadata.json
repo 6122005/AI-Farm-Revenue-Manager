@@ -1,0 +1,140 @@
+{
+  "model": "LGBMRegressor(learning_rate=0.08, max_depth=5, n_estimators=120,\n              random_state=42, verbose=-1)",
+  "version_id": "20260722_093424",
+  "champion_name": "LightGBM",
+  "features": [
+    "month",
+    "day_of_week",
+    "is_weekend",
+    "is_festival",
+    "is_festival_eve",
+    "is_vacation",
+    "season_monsoon",
+    "season_summer",
+    "season_winter",
+    "is_peak_season",
+    "is_off_season",
+    "person_count",
+    "is_couple",
+    "is_family",
+    "is_corporate",
+    "lead_days",
+    "competitor_price",
+    "temperature",
+    "rain_probability",
+    "humidity",
+    "demand_score",
+    "commercial_slot_12H_DAY",
+    "commercial_slot_12H_NIGHT",
+    "commercial_slot_24H_DAY",
+    "commercial_slot_24H_NIGHT",
+    "commercial_slot_COUPLE_DAY",
+    "commercial_slot_COUPLE_NIGHT"
+  ],
+  "metrics": {
+    "r2": 0.48709104989132823,
+    "mae": 1090.0477871799592,
+    "rmse": 1909.6773233567205,
+    "mape": 40.48677366059438,
+    "prediction_interval_coverage": 89.91869918699187,
+    "validation_strategy": "TimeSeriesSplit(n_splits=5)",
+    "feature_importances": {
+      "month": 522.0,
+      "day_of_week": 455.0,
+      "demand_score": 172.0,
+      "commercial_slot_COUPLE_DAY": 87.0,
+      "commercial_slot_24H_NIGHT": 84.0,
+      "season_summer": 68.0,
+      "is_festival": 40.0,
+      "commercial_slot_12H_DAY": 36.0,
+      "commercial_slot_12H_NIGHT": 35.0,
+      "is_peak_season": 30.0
+    }
+  },
+  "all_metrics": {
+    "XGBoost": {
+      "r2": 0.406959689335071,
+      "mae": 1156.3335375778074,
+      "rmse": 2053.439725928186,
+      "mape": 42.628650123228105,
+      "prediction_interval_coverage": 89.91869918699187,
+      "validation_strategy": "TimeSeriesSplit(n_splits=5)",
+      "feature_importances": {
+        "commercial_slot_24H_NIGHT": 0.6485991477966309,
+        "season_summer": 0.16597233712673187,
+        "season_winter": 0.04111117869615555,
+        "day_of_week": 0.0385478138923645,
+        "month": 0.015285050496459007,
+        "demand_score": 0.013920564204454422,
+        "commercial_slot_24H_DAY": 0.01113576628267765,
+        "commercial_slot_12H_DAY": 0.010290514677762985,
+        "is_vacation": 0.00901117268949747,
+        "is_off_season": 0.00862098764628172
+      }
+    },
+    "RandomForest": {
+      "r2": 0.4010149035337498,
+      "mae": 1210.2333388625595,
+      "rmse": 2063.706160876225,
+      "mape": 47.68437002788756,
+      "prediction_interval_coverage": 89.91869918699187,
+      "validation_strategy": "TimeSeriesSplit(n_splits=5)",
+      "feature_importances": {
+        "commercial_slot_24H_NIGHT": 0.4124764913325135,
+        "day_of_week": 0.20230913031725895,
+        "month": 0.10827520785748462,
+        "season_summer": 0.0867015490411686,
+        "is_weekend": 0.04897779949624902,
+        "demand_score": 0.048431330272163044,
+        "season_winter": 0.017132271024656254,
+        "is_vacation": 0.012686643312857465,
+        "is_festival": 0.012053379900797282,
+        "season_monsoon": 0.00959142650387037
+      }
+    },
+    "LightGBM": {
+      "r2": 0.48709104989132823,
+      "mae": 1090.0477871799592,
+      "rmse": 1909.6773233567205,
+      "mape": 40.48677366059438,
+      "prediction_interval_coverage": 89.91869918699187,
+      "validation_strategy": "TimeSeriesSplit(n_splits=5)",
+      "feature_importances": {
+        "month": 522.0,
+        "day_of_week": 455.0,
+        "demand_score": 172.0,
+        "commercial_slot_COUPLE_DAY": 87.0,
+        "commercial_slot_24H_NIGHT": 84.0,
+        "season_summer": 68.0,
+        "is_festival": 40.0,
+        "commercial_slot_12H_DAY": 36.0,
+        "commercial_slot_12H_NIGHT": 35.0,
+        "is_peak_season": 30.0
+      }
+    },
+    "CatBoost": {
+      "r2": 0.4700184383955347,
+      "mae": 1127.933918190272,
+      "rmse": 1941.1997762170593,
+      "mape": 43.37545164359352,
+      "prediction_interval_coverage": 89.91869918699187,
+      "validation_strategy": "TimeSeriesSplit(n_splits=5)",
+      "feature_importances": {
+        "commercial_slot_24H_NIGHT": 31.494524583319755,
+        "day_of_week": 20.7451738390275,
+        "month": 16.651294485763387,
+        "season_summer": 10.746370614607711,
+        "demand_score": 7.392813748301212,
+        "is_weekend": 5.956021804998215,
+        "season_winter": 2.8281060662214044,
+        "commercial_slot_COUPLE_DAY": 0.8872039932803851,
+        "is_off_season": 0.8058046210709491,
+        "commercial_slot_24H_DAY": 0.4600752330059212
+      }
+    }
+  },
+  "training_started_at": "2026-07-22T09:34:24.880574",
+  "trained_at": "2026-07-22T09:34:30.803867",
+  "artifact_path": "/home/ebl-01/Desktop/farm/backend/models_store/version_history/model_20260722_093424.joblib",
+  "model_path": "/home/ebl-01/Desktop/farm/backend/models_store/champion_model.joblib"
+}
