@@ -5,6 +5,7 @@ from datetime import datetime, date
 from pathlib import Path
 from typing import Dict, Any, List, Tuple
 from app.config import DATA_DIR
+from app.services.slot_engine import slot_engine
 
 FESTIVAL_CSV_PATH = DATA_DIR / "festivals.csv"
 
@@ -164,11 +165,92 @@ class BusinessInsightDiscoverer:
             
             # Force reload in FeatureEngineer cache
             FeatureEngineer._insights = insights
+            cls.discover_festival_intelligence(df)
         except Exception as ex:
             print(f"⚠️ Error discovering business insights: {ex}")
 
+    @classmethod
+    def discover_festival_intelligence(cls, df: pd.DataFrame) -> Dict[str, Any]:
+        """
+        Learns festival intelligence per festival name strictly from historical records in Farm_Booking_Data.xlsx.
+        """
+        try:
+            df = df.copy()
+            p_col = "selling_price" if "selling_price" in df.columns else "price"
+            df[p_col] = pd.to_numeric(df[p_col], errors="coerce").fillna(0.0)
+            
+            fest_profile = {}
+            if "festival_name" in df.columns or "is_festival" in df.columns:
+                df_valid = df[df[p_col] > 0]
+                non_fest_rows = df_valid[df_valid.get("is_festival", 0) == 0]
+                non_fest_mean = float(non_fest_rows[p_col].mean()) if len(non_fest_rows) > 0 else 4000.0
+                
+                fest_mask = df_valid["festival_name"].notna() & (df_valid["festival_name"].astype(str).str.strip() != "") & (df_valid["festival_name"].astype(str).str.strip() != "No Festival")
+                fest_rows = df_valid[fest_mask]
+                
+                for f_name, group in fest_rows.groupby("festival_name"):
+                    count = len(group)
+                    avg_p = float(group[p_col].mean())
+                    med_p = float(group[p_col].median())
+                    std_p = float(group[p_col].std()) if count > 1 else 0.0
+                    
+                    prem_avg = round(avg_p / non_fest_mean, 3) if non_fest_mean > 0 else 1.0
+                    prem_med = round(med_p / non_fest_mean, 3) if non_fest_mean > 0 else 1.0
+                    confidence = round(min(1.0, count / 5.0), 2)
+                    
+                    wk_group = group[group["is_weekend"] == 1] if "is_weekend" in group.columns else pd.DataFrame()
+                    wd_group = group[group["is_weekend"] == 0] if "is_weekend" in group.columns else pd.DataFrame()
+                    
+                    wk_interaction = 1.0
+                    if len(wk_group) > 0 and len(wd_group) > 0 and wd_group[p_col].mean() > 0:
+                        wk_interaction = round(float(wk_group[p_col].mean() / wd_group[p_col].mean()), 3)
+                        
+                    dur_mean = float(group["duration_hours"].mean()) if "duration_hours" in group.columns else 24.0
+                    
+                    fest_profile[str(f_name)] = {
+                        "historical_sample_count": count,
+                        "average_price": round(avg_p, 2),
+                        "median_price": round(med_p, 2),
+                        "std_price": round(std_p, 2),
+                        "average_premium": prem_avg,
+                        "median_premium": prem_med,
+                        "confidence_score": confidence,
+                        "peak_duration": round(dur_mean, 1),
+                        "weekend_interaction": wk_interaction
+                    }
+                    
+            fest_path = DATA_DIR / "learned_festival_intelligence.json"
+            with open(fest_path, "w") as f:
+                json.dump(fest_profile, f, indent=2)
+            print(f"🎉 [FESTIVAL INTELLIGENCE] Discovered intelligence for {len(fest_profile)} festivals.")
+            return fest_profile
+        except Exception as ex:
+            print(f"⚠️ Error discovering festival intelligence: {ex}")
+            return {}
+
+
 class FeatureEngineer:
     _insights = None
+    _group_averages_cache = None
+
+    @classmethod
+    def purge_cache(cls):
+        cls._group_averages_cache = None
+
+    @classmethod
+    def get_group_averages(cls) -> Dict[str, Any]:
+        if cls._group_averages_cache is None:
+            import json
+            avg_path = DATA_DIR / "group_averages.json"
+            if avg_path.exists():
+                try:
+                    with open(avg_path, "r") as f:
+                        cls._group_averages_cache = json.load(f)
+                except Exception:
+                    cls._group_averages_cache = {}
+            else:
+                cls._group_averages_cache = {}
+        return cls._group_averages_cache
 
     @classmethod
     def _load_insights(cls) -> Dict[str, Any]:
@@ -198,6 +280,233 @@ class FeatureEngineer:
         return cls._insights
 
     @classmethod
+    def compute_advanced_time_series_features(cls, df: pd.DataFrame) -> pd.DataFrame:
+        df = df.copy()
+        df["booking_date_dt"] = pd.to_datetime(df["booking_date"])
+        df.sort_values(by="booking_date_dt", ascending=True, inplace=True)
+        df.reset_index(drop=True, inplace=True)
+        
+        # Initialize lag columns with fallback values
+        df["slot_lag_price_1"] = 8500.0
+        df["slot_lag_price_2"] = 8500.0
+        
+        # Compute slot-specific lags
+        for slot in df["commercial_slot"].unique():
+            slot_mask = df["commercial_slot"] == slot
+            slot_prices = df.loc[slot_mask, "selling_price"]
+            df.loc[slot_mask, "slot_lag_price_1"] = slot_prices.shift(1).fillna(8500.0)
+            df.loc[slot_mask, "slot_lag_price_2"] = slot_prices.shift(2).fillna(8500.0)
+            
+        # Days since last booking
+        df["days_since_last_booking"] = df["booking_date_dt"].diff().dt.days.fillna(0.0).astype(float)
+        
+        # Rolling price averages within the same slot
+        df["rolling_price_mean_30"] = 8500.0
+        for slot in df["commercial_slot"].unique():
+            slot_mask = df["commercial_slot"] == slot
+            df.loc[slot_mask, "rolling_price_mean_30"] = df.loc[slot_mask, "selling_price"].rolling(window=10, min_periods=1).mean().fillna(8500.0)
+            
+        # Rolling demand & bookings count (Historical Demand)
+        df_temp = df.set_index("booking_date_dt")
+        df["bookings_last_7d"] = df_temp.rolling("7D")["selling_price"].count().values.astype(float)
+        df["bookings_last_30d"] = df_temp.rolling("30D")["selling_price"].count().values.astype(float)
+        
+        # Occupancy features (rolling occupancy estimation)
+        df["occupancy_rate_7d"] = (df["bookings_last_7d"] / 7.0).clip(0.0, 1.0)
+        df["occupancy_rate_30d"] = (df["bookings_last_30d"] / 30.0).clip(0.0, 1.0)
+        
+        # Booking velocity
+        df["booking_velocity"] = (df["bookings_last_7d"] / 7.0).astype(float)
+        
+        # V2 Occupancy Intelligence
+        df["month_year"] = df["booking_date_dt"].dt.to_period("M")
+        month_counts = df.groupby("month_year")["selling_price"].transform("count").astype(float)
+        df["current_occupancy_pct"] = (month_counts / 120.0).clip(0.0, 1.0)
+        df["remaining_inventory"] = (120.0 - month_counts).clip(lower=0.0)
+        df["booking_pace"] = (df["bookings_last_7d"] / 7.0) / (df["bookings_last_30d"] / 30.0 + 1e-5)
+        df["booking_pace"] = df["booking_pace"].clip(0.1, 5.0).fillna(1.0)
+        df["occupancy_trend"] = df["occupancy_rate_7d"] - df["occupancy_rate_30d"]
+        
+        if "month_year" in df.columns:
+            df.drop(columns=["month_year"], inplace=True)
+            
+        return df
+
+    @classmethod
+    def calculate_group_averages(cls, df: pd.DataFrame):
+        cls.purge_cache()
+        try:
+            avg_dict = {}
+            
+            # Ensure month, year, is_weekend, selling_price, person_count are numeric and slot normalized
+            df = df.copy()
+            df["commercial_slot"] = df["commercial_slot"].apply(lambda s: slot_engine.normalize_commercial_slot(s))
+            df["month"] = pd.to_numeric(df["month"], errors="coerce").fillna(6).astype(int)
+            df["year"] = pd.to_numeric(df["year"], errors="coerce").fillna(2026).astype(int)
+            df["is_weekend"] = pd.to_numeric(df["is_weekend"], errors="coerce").fillna(0).astype(int)
+            df["person_count"] = pd.to_numeric(df["person_count"], errors="coerce").fillna(4).astype(int)
+            df["selling_price"] = pd.to_numeric(df["selling_price"], errors="coerce").fillna(8500.0).astype(float)
+
+            
+            # 1. slot_month_weekend_avg & independent segment statistics
+            gp1 = df.groupby(["commercial_slot", "month", "is_weekend"])["selling_price"].mean().reset_index()
+            for _, row in gp1.iterrows():
+                key = f"slot_month_weekend_{row['commercial_slot']}_{int(row['month'])}_{int(row['is_weekend'])}"
+                avg_dict[key] = float(row["selling_price"])
+                
+            # Month & Slot Specific Weekend Premium Ratios (100% Independent per Slot and Month)
+            gp_wk = df[df["is_weekend"] == 1].groupby(["commercial_slot", "month"])["selling_price"].mean().reset_index()
+            gp_wd = df[df["is_weekend"] == 0].groupby(["commercial_slot", "month"])["selling_price"].mean().reset_index()
+            wd_map = {(row['commercial_slot'], int(row['month'])): float(row['selling_price']) for _, row in gp_wd.iterrows()}
+            
+            for _, row in gp_wk.iterrows():
+                slot_code = str(row['commercial_slot'])
+                slot_norm = slot_engine.normalize_commercial_slot(slot_code)
+                m_code = int(row['month'])
+                wk_mean = float(row['selling_price'])
+                wd_mean = wd_map.get((slot_code, m_code), 0.0)
+                
+                # Absolute rupee difference calculation (No percentage multiplication!)
+                abs_diff = round(wk_mean - wd_mean, 2) if wd_mean > 0 else 0.0
+                ratio = round(wk_mean / wd_mean, 3) if wd_mean > 0 else 1.25
+                
+                for s_key in set([slot_code, slot_norm]):
+                    key_diff = f"slot_month_weekend_diff_{s_key}_{m_code}"
+                    avg_dict[key_diff] = abs_diff
+                    key = f"slot_month_weekend_ratio_{s_key}_{m_code}"
+                    avg_dict[key] = ratio
+
+
+            # Independent Segment Statistics (mean, median, std, count, confidence, p25, p75)
+            gp_stats = df.groupby(["commercial_slot", "month", "is_weekend"])["selling_price"].agg(
+                mean="mean",
+                median="median",
+                std="std",
+                count="count",
+                p25=lambda x: np.percentile(x, 25),
+                p75=lambda x: np.percentile(x, 75)
+            ).reset_index()
+            
+            for _, row in gp_stats.iterrows():
+                slot_c = str(row["commercial_slot"])
+                slot_norm = slot_engine.normalize_commercial_slot(slot_c)
+                m_c = int(row["month"])
+                w_c = int(row["is_weekend"])
+                cnt = int(row["count"])
+                
+                for s_key in set([slot_c, slot_norm]):
+                    prefix = f"seg_{s_key}_{m_c}_{w_c}"
+                    avg_dict[f"{prefix}_mean"] = float(row["mean"])
+                    avg_dict[f"{prefix}_median"] = float(row["median"])
+                    avg_dict[f"{prefix}_std"] = float(row["std"]) if pd.notna(row["std"]) else 0.0
+                    avg_dict[f"{prefix}_count"] = float(cnt)
+                    avg_dict[f"{prefix}_confidence"] = float(min(1.0, cnt / 5.0))
+                    avg_dict[f"{prefix}_p25"] = float(row["p25"])
+                    avg_dict[f"{prefix}_p75"] = float(row["p75"])
+
+            # Trimmed Mean & Weighted Median for outlier resistance
+            for (slot_c, m_c, w_c), grp in df.groupby(["commercial_slot", "month", "is_weekend"]):
+                slot_norm = slot_engine.normalize_commercial_slot(slot_c)
+                prices = grp["selling_price"].sort_values().values
+                n_p = len(prices)
+                if n_p >= 5:
+                    cut = int(np.floor(n_p * 0.10))
+                    trimmed_prices = prices[cut : n_p - cut] if cut > 0 else prices
+                    t_mean = float(np.mean(trimmed_prices))
+                else:
+                    t_mean = float(np.mean(prices))
+                    
+                w_med = float(np.median(prices))
+                for s_key in set([str(slot_c), slot_norm]):
+                    prefix = f"seg_{s_key}_{int(m_c)}_{int(w_c)}"
+                    avg_dict[f"{prefix}_trimmed_mean"] = t_mean
+                    avg_dict[f"{prefix}_weighted_median"] = w_med
+
+
+
+                
+            # 2. slot_weekend_avg
+            gp2 = df.groupby(["commercial_slot", "is_weekend"])["selling_price"].mean().reset_index()
+            for _, row in gp2.iterrows():
+                key = f"slot_weekend_{row['commercial_slot']}_{int(row['is_weekend'])}"
+                avg_dict[key] = float(row["selling_price"])
+                
+            # 3. slot_festival_avg
+            gp3 = df.groupby(["commercial_slot", "is_festival"])["selling_price"].mean().reset_index()
+            for _, row in gp3.iterrows():
+                key = f"slot_festival_{row['commercial_slot']}_{int(row['is_festival'])}"
+                avg_dict[key] = float(row["selling_price"])
+                
+            # 4. slot_person_avg
+            gp4 = df.groupby(["commercial_slot", "person_count"])["selling_price"].mean().reset_index()
+            for _, row in gp4.iterrows():
+                key = f"slot_person_{row['commercial_slot']}_{int(row['person_count'])}"
+                avg_dict[key] = float(row["selling_price"])
+
+            # 5. slot_month_avg
+            gp5 = df.groupby(["commercial_slot", "month"])["selling_price"].mean().reset_index()
+            for _, row in gp5.iterrows():
+                key = f"slot_month_{row['commercial_slot']}_{int(row['month'])}"
+                avg_dict[key] = float(row["selling_price"])
+                
+            # 6. slot_month_weekday_avg (where is_weekend == 0)
+            gp6 = df[df["is_weekend"] == 0].groupby(["commercial_slot", "month"])["selling_price"].mean().reset_index()
+            for _, row in gp6.iterrows():
+                key = f"slot_month_weekday_{row['commercial_slot']}_{int(row['month'])}"
+                avg_dict[key] = float(row["selling_price"])
+                
+            # 7. slot_person_month_avg
+            gp7 = df.groupby(["commercial_slot", "person_count", "month"])["selling_price"].mean().reset_index()
+            for _, row in gp7.iterrows():
+                key = f"slot_person_month_{row['commercial_slot']}_{int(row['person_count'])}_{int(row['month'])}"
+                avg_dict[key] = float(row["selling_price"])
+                
+            # 8. slot_person_weekend_avg
+            gp8 = df.groupby(["commercial_slot", "person_count", "is_weekend"])["selling_price"].mean().reset_index()
+            for _, row in gp8.iterrows():
+                key = f"slot_person_weekend_{row['commercial_slot']}_{int(row['person_count'])}_{int(row['is_weekend'])}"
+                avg_dict[key] = float(row["selling_price"])
+                
+            # 9. month_slot_booking_count
+            gp9 = df.groupby(["month", "commercial_slot"])["selling_price"].count().reset_index()
+            for _, row in gp9.iterrows():
+                key = f"month_slot_booking_count_{int(row['month'])}_{row['commercial_slot']}"
+                avg_dict[key] = float(row["selling_price"])
+                
+            # 10. month_slot_avg_price
+            gp10 = df.groupby(["month", "commercial_slot"])["selling_price"].mean().reset_index()
+            for _, row in gp10.iterrows():
+                key = f"month_slot_avg_price_{int(row['month'])}_{row['commercial_slot']}"
+                avg_dict[key] = float(row["selling_price"])
+                
+            # 11. month_weekend_demand
+            gp11 = df[df["is_weekend"] == 1].groupby(["month"])["selling_price"].count().reset_index()
+            for _, row in gp11.iterrows():
+                key = f"month_weekend_demand_{int(row['month'])}"
+                avg_dict[key] = float(row["selling_price"])
+                
+            # 12. previous_year_same_month_slot_avg
+            gp12 = df.groupby(["year", "month", "commercial_slot"])["selling_price"].mean().reset_index()
+            for _, row in gp12.iterrows():
+                key = f"year_month_slot_{int(row['year'])}_{int(row['month'])}_{row['commercial_slot']}"
+                avg_dict[key] = float(row["selling_price"])
+                
+            # Slot overall fallback
+            gp_slot = df.groupby(["commercial_slot"])["selling_price"].mean().reset_index()
+            for _, row in gp_slot.iterrows():
+                key = f"slot_overall_{row['commercial_slot']}"
+                avg_dict[key] = float(row["selling_price"])
+                
+            avg_path = DATA_DIR / "group_averages.json"
+            with open(avg_path, "w") as f:
+                json.dump(avg_dict, f, indent=2)
+            print(f"📊 [FEATURE ENGINEERING] Saved {len(avg_dict)} group averages to group_averages.json")
+            return avg_dict
+        except Exception as e:
+            print(f"⚠️ Error saving group averages: {e}")
+            return {}
+
+    @classmethod
     def extract_features_from_dict(cls, row: Dict[str, Any]) -> Dict[str, Any]:
         """
         Extracts engineered feature dictionary for a single booking request or record.
@@ -224,6 +533,10 @@ class FeatureEngineer:
 
         target_date = dt.date()
         month = int(dt.month)
+        import math
+        month_rad = 2.0 * math.pi * month / 12.0
+        month_sin = math.sin(month_rad)
+        month_cos = math.cos(month_rad)
         year = int(dt.year)
         day_of_week = int(dt.weekday()) # 0 = Monday, 6 = Sunday
         is_weekend = 1 if day_of_week in [5, 6] else 0
@@ -259,12 +572,13 @@ class FeatureEngineer:
 
         person_count = safe_int(row.get("person_count"), 4)
         
-        # Couple Discount Logic
-        is_couple = 1 if person_count <= 2 else 0
+        # Couple Designation Logic (Step 3 Rule)
+        is_couple = 1 if person_count == 2 else 0
         is_family = 1 if 3 <= person_count <= 12 else 0
         is_corporate = 1 if person_count > 12 else 0
 
-        commercial_slot = str(row.get("commercial_slot", "12H_DAY"))
+        slot_type = slot_engine.normalize_commercial_slot(row.get("slot_type", row.get("commercial_slot", "12H Day")))
+        commercial_slot = slot_type # backwards compatibility
         
         passed_lead_days = row.get("lead_days")
         if passed_lead_days is not None and safe_int(passed_lead_days, -1) >= 0:
@@ -356,24 +670,150 @@ class FeatureEngineer:
             business_confidence_score = 95.0
         elif lead_days < 2:
             business_confidence_score = 75.0
+        
+        # Historical group averages lookups (Phase 8 & 9)
+        avg_dict = cls.get_group_averages()
+        slot_month_weekend_ratio = avg_dict.get(f"slot_month_weekend_ratio_{slot_type}_{month}", 1.25)
+        slot_month_weekend_diff = avg_dict.get(f"slot_month_weekend_diff_{slot_type}_{month}", 0.0)
+        
+        prefix = f"seg_{slot_type}_{month}_{is_weekend}"
 
-        slot_code = str(row.get("commercial_slot", "12H_DAY")).upper().strip().replace(" ", "_")
-        slot_capacity_hours = 24.0 if "24H" in slot_code else 12.0
+        segment_mean = avg_dict.get(f"{prefix}_mean", 8500.0)
+        segment_median = avg_dict.get(f"{prefix}_median", 8500.0)
+        segment_trimmed_mean = avg_dict.get(f"{prefix}_trimmed_mean", segment_mean)
+        segment_weighted_median = avg_dict.get(f"{prefix}_weighted_median", segment_median)
+        segment_std = avg_dict.get(f"{prefix}_std", 0.0)
+        segment_count = avg_dict.get(f"{prefix}_count", 0.0)
+        segment_confidence = avg_dict.get(f"{prefix}_confidence", 0.5)
+        p25_price = avg_dict.get(f"{prefix}_p25", 8500.0 * 0.85)
+        p75_price = avg_dict.get(f"{prefix}_p75", 8500.0 * 1.15)
+
+
+        slot_month_weekend_avg = avg_dict.get(f"slot_month_weekend_{slot_type}_{month}_{is_weekend}", segment_mean)
+        slot_weekend_avg = avg_dict.get(f"slot_weekend_{slot_type}_{is_weekend}", segment_mean)
+        slot_festival_avg = avg_dict.get(f"slot_festival_{slot_type}_{is_festival}", segment_mean)
+        slot_person_avg = avg_dict.get(f"slot_person_{slot_type}_{person_count}", segment_mean)
+        
+        slot_month_avg = avg_dict.get(f"slot_month_{slot_type}_{month}", segment_mean)
+        slot_month_weekday_avg = avg_dict.get(f"slot_month_weekday_{slot_type}_{month}", segment_mean)
+        slot_person_month_avg = avg_dict.get(f"slot_person_month_{slot_type}_{person_count}_{month}", segment_mean)
+        month_slot_avg = avg_dict.get(f"month_slot_avg_price_{month}_{slot_type}", segment_mean)
+        month_weekend_slot_avg = slot_month_weekend_avg
+        month_guest_slot_avg = slot_person_month_avg
+        month_festival_slot_avg = slot_festival_avg
+        month_leadtime_slot_avg = segment_mean
+        month_weather_slot_avg = segment_mean
+        hierarchical_fallback_avg = segment_mean
+        hierarchical_confidence_score = segment_confidence
+        hierarchical_matched_level = 1 if segment_count >= 3 else 3
+
+
+        slot_capacity_hours = 24.0 if "24H" in slot_type.upper() else 12.0
         duration_hours = safe_float(row.get("duration_hours"), slot_capacity_hours)
         if duration_hours <= 0:
             duration_hours = slot_capacity_hours
+
+        extended_stay = 1 if duration_hours > 24 else 0
+        is_extended_booking = 1 if duration_hours > 24.0 else 0
+        commercial_units = float(np.round(duration_hours / 24.0, 2))
+        hours_over_24 = max(0.0, float(duration_hours - 24.0))
+
+        if duration_hours <= 13.0:
+            duration_bucket = "12H"
+        elif duration_hours <= 30.0:
+            duration_bucket = "24H"
+        elif duration_hours <= 54.0:
+            duration_bucket = "48H"
+        elif duration_hours <= 78.0:
+            duration_bucket = "72H"
+        elif duration_hours <= 102.0:
+            duration_bucket = "96H"
+        else:
+            duration_bucket = "120H+"
+
+        selling_price_raw = safe_float(row.get("selling_price"), 0.0)
+        if selling_price_raw > 0 and commercial_units > 0:
+            effective_daily_rate = float(np.round(selling_price_raw / commercial_units, 2))
+        else:
+            effective_daily_rate = 8500.0
+
+        if duration_hours <= 24.0:
+            extended_discount_ratio = 1.0
+        elif duration_hours <= 48.0:
+            extended_discount_ratio = 0.95
+        elif duration_hours <= 72.0:
+            extended_discount_ratio = 0.90
+        elif duration_hours <= 96.0:
+            extended_discount_ratio = 0.85
+        else:
+            extended_discount_ratio = 0.80
+
 
         slot_utilization_ratio = min(1.0, max(0.1, duration_hours / slot_capacity_hours))
         opportunity_cost_factor = float(np.round(max(0.90, 0.90 + 0.10 * slot_utilization_ratio), 4))
 
         competitor_diff = 0.0
         if competitor_price > 0:
-            # We will approximate this or compute directly
             competitor_diff = competitor_price - 8500.0 # baseline offset
+
+        # weather forecast variable
+        weather_condition = str(row.get("weather_forecast", row.get("weather_condition", "Clear")))
+
+        # V2 features
+        is_friday_night = 1 if (day_of_week == 4 and "NIGHT" in slot_type.upper()) else 0
+        is_saturday_day = 1 if (day_of_week == 5 and "DAY" in slot_type.upper()) else 0
+        is_saturday_night = 1 if (day_of_week == 5 and "NIGHT" in slot_type.upper()) else 0
+        is_sunday_day = 1 if (day_of_week == 6 and "DAY" in slot_type.upper()) else 0
+        is_sunday_night = 1 if (day_of_week == 6 and "NIGHT" in slot_type.upper()) else 0
+
+        is_holiday_bridge = 1 if (days_before_festival == 1 and day_of_week == 4) or (days_after_festival == 1 and day_of_week == 0) else 0
+        wedding_season = 1 if month in [11, 12, 1, 2] else 0
+
+        festival_importance_score = 0.0
+        if is_festival:
+            f_name = str(festival_name).lower()
+            if any(k in f_name for k in ["diwali", "new year", "christmas", "holi", "uttarayan"]):
+                festival_importance_score = 1.0
+            elif any(k in f_name for k in ["eid", "ganesh", "navratri", "janmashtami"]):
+                festival_importance_score = 0.8
+            else:
+                festival_importance_score = 0.5
+
+        is_same_day = 1 if lead_days == 0 else 0
+        is_lead_1_3d = 1 if 1 <= lead_days <= 3 else 0
+        is_lead_4_7d = 1 if 4 <= lead_days <= 7 else 0
+        is_lead_8_14d = 1 if 8 <= lead_days <= 14 else 0
+        is_lead_15_30d = 1 if 15 <= lead_days <= 30 else 0
+        is_lead_31_60d = 1 if 31 <= lead_days <= 60 else 0
+        is_lead_60d_plus = 1 if lead_days > 60 else 0
+
+        lead_time_demand_curve = float(np.round(np.exp(-0.02 * lead_days), 4))
+
+        # Occupancy Features (fallbacks)
+        current_occupancy_pct = safe_float(row.get("current_occupancy_pct"), 0.35)
+        remaining_inventory = safe_float(row.get("remaining_inventory"), 10.0)
+        booking_pace = safe_float(row.get("booking_pace"), 1.0)
+        occupancy_trend = safe_float(row.get("occupancy_trend"), 0.0)
+
+        # Demand Index Forecasting (0 to 100)
+        base_index = 30.0
+        if is_weekend:
+            base_index += 20.0
+        if is_festival:
+            base_index += 30.0 * festival_importance_score
+        if wedding_season:
+            base_index += 10.0
+        if temp > 33.0 or rain_prob > 50.0:
+            base_index -= 15.0
+        base_index += current_occupancy_pct * 30.0
+        base_index += (booking_pace - 1.0) * 10.0
+        demand_index = float(np.clip(base_index, 5.0, 100.0))
 
         return {
             "booking_date": dt.strftime("%Y-%m-%d"),
             "month": month,
+            "month_sin": month_sin,
+            "month_cos": month_cos,
             "year": year,
             "day_of_week": day_of_week,
             "week_of_year": week_of_year,
@@ -395,15 +835,25 @@ class FeatureEngineer:
             "season_winter": season_winter,
             "is_peak_season": is_peak_season,
             "is_off_season": is_off_season,
-            "commercial_slot": commercial_slot,
+            "slot_type": slot_type,
+            "commercial_slot": slot_type,
             "slot_capacity_hours": slot_capacity_hours,
             "duration_hours": duration_hours,
+            "commercial_units": commercial_units,
+            "duration_bucket": duration_bucket,
+            "is_extended_booking": is_extended_booking,
+            "hours_over_24": hours_over_24,
+            "effective_daily_rate": effective_daily_rate,
+            "extended_discount_ratio": extended_discount_ratio,
+            "extended_stay": extended_stay,
             "slot_utilization_ratio": slot_utilization_ratio,
+
             "opportunity_cost_factor": opportunity_cost_factor,
             "person_count": person_count,
             "is_couple": is_couple,
             "is_family": is_family,
             "is_corporate": is_corporate,
+            "weather_condition": weather_condition,
             "lead_days": lead_days,
             "lead_time_bucket": lead_time_bucket,
             "lead_time_cat": lead_time_cat,
@@ -416,6 +866,55 @@ class FeatureEngineer:
             "cloud_cover": cloud_cover,
             "demand_score": demand_score,
             "business_confidence_score": business_confidence_score,
+            "month_slot_avg": month_slot_avg,
+            "month_weekend_slot_avg": month_weekend_slot_avg,
+            "month_guest_slot_avg": month_guest_slot_avg,
+            "month_festival_slot_avg": month_festival_slot_avg,
+            "month_leadtime_slot_avg": month_leadtime_slot_avg,
+            "month_weather_slot_avg": month_weather_slot_avg,
+            "hierarchical_fallback_avg": hierarchical_fallback_avg,
+            "hierarchical_confidence_score": hierarchical_confidence_score,
+            "hierarchical_matched_level": hierarchical_matched_level,
+
+            # Independent Segment Historical Statistics
+            "slot_month_weekend_ratio": slot_month_weekend_ratio,
+            "slot_month_weekend_diff": slot_month_weekend_diff,
+            "segment_mean": segment_mean,
+            "segment_median": segment_median,
+            "segment_trimmed_mean": segment_trimmed_mean,
+            "segment_weighted_median": segment_weighted_median,
+            "segment_std": segment_std,
+            "segment_count": segment_count,
+            "segment_confidence": segment_confidence,
+            "p25_price": p25_price,
+            "p75_price": p75_price,
+
+
+
+
+            # V2 features
+            "is_friday_night": is_friday_night,
+            "is_saturday_day": is_saturday_day,
+            "is_saturday_night": is_saturday_night,
+            "is_sunday_day": is_sunday_day,
+            "is_sunday_night": is_sunday_night,
+            "is_holiday_bridge": is_holiday_bridge,
+            "wedding_season": wedding_season,
+            "is_same_day": is_same_day,
+            "is_lead_1_3d": is_lead_1_3d,
+            "is_lead_4_7d": is_lead_4_7d,
+            "is_lead_8_14d": is_lead_8_14d,
+            "is_lead_15_30d": is_lead_15_30d,
+            "is_lead_31_60d": is_lead_31_60d,
+            "is_lead_60d_plus": is_lead_60d_plus,
+            "lead_time_demand_curve": lead_time_demand_curve,
+            "current_occupancy_pct": current_occupancy_pct,
+            "remaining_inventory": remaining_inventory,
+            "booking_pace": booking_pace,
+            "occupancy_trend": occupancy_trend,
+            "demand_index": demand_index,
+            "festival_importance_score": festival_importance_score,
+
             "highest_revenue_weekday": insights.get("highest_revenue_weekday", 6),
             "highest_revenue_month": insights.get("highest_revenue_month", 5),
             "weekend_premium_ratio": weekend_premium,
@@ -424,12 +923,55 @@ class FeatureEngineer:
             "rain_impact_ratio": rain_impact_ratio
         }
 
-    @staticmethod
-    def process_dataframe(df: pd.DataFrame) -> pd.DataFrame:
-        """
-        Enriches a raw booking DataFrame with full engineered features.
-        STRICT EXPLICIT PRICE HEADER MAPPING (prevents mapping random 'val' or 'total' columns).
-        """
+    @classmethod
+    def compute_loo_group_metrics(
+        cls, df: pd.DataFrame, group_cols: List[str], target_col: str, is_prediction: bool
+    ) -> Tuple[np.ndarray, np.ndarray]:
+        gp = df.groupby(group_cols)[target_col].agg(["sum", "count"]).reset_index()
+        # Preserve original index alignment
+        merged = df[group_cols].reset_index().merge(gp, on=group_cols, how="left").set_index("index")
+        
+        sum_val = merged.loc[df.index, "sum"].values
+        count_val = merged.loc[df.index, "count"].values
+        y_val = df[target_col].values
+        
+        if is_prediction and "_is_prediction_row" in df.columns:
+            is_pred_target = df["_is_prediction_row"].values.astype(bool)
+            adj_sum = np.where(is_pred_target, sum_val, sum_val - y_val)
+            adj_count = np.where(is_pred_target, count_val, count_val - 1)
+        else:
+            adj_sum = sum_val - y_val
+            adj_count = count_val - 1
+            
+        mean_val = np.where(adj_count > 0, adj_sum / adj_count, np.nan)
+        return mean_val, adj_count
+
+    @classmethod
+    def compute_loo_hierarchical_mean(
+        cls, df: pd.DataFrame, group_cols: List[str], fallback_col: str, target_col: str, is_prediction: bool
+    ) -> pd.Series:
+        gp = df.groupby(group_cols)[target_col].agg(["sum", "count"]).reset_index()
+        # Preserve original index alignment
+        merged = df[group_cols].reset_index().merge(gp, on=group_cols, how="left").set_index("index")
+        
+        sum_val = merged.loc[df.index, "sum"].values
+        count_val = merged.loc[df.index, "count"].values
+        y_val = df[target_col].values
+        
+        if is_prediction and "_is_prediction_row" in df.columns:
+            is_pred_target = df["_is_prediction_row"].values.astype(bool)
+            adj_sum = np.where(is_pred_target, sum_val, sum_val - y_val)
+            adj_count = np.where(is_pred_target, count_val, count_val - 1)
+        else:
+            adj_sum = sum_val - y_val
+            adj_count = count_val - 1
+            
+        mean_val = np.where(adj_count > 0, adj_sum / adj_count, np.nan)
+        fallback_series = df[fallback_col].values
+        return pd.Series(np.where(np.isnan(mean_val), fallback_series, mean_val), index=df.index)
+
+    @classmethod
+    def process_dataframe(cls, df: pd.DataFrame, is_prediction: bool = False) -> pd.DataFrame:
         df = df.copy()
         
         col_map = {}
@@ -437,7 +979,7 @@ class FeatureEngineer:
             clean = str(c).strip().lower().replace(" ", "_").replace("-", "_")
             if clean in ["date", "bookingdate", "booking_date", "check_in", "checkin", "checkin_date", "event_date", "day"]:
                 col_map[c] = "booking_date"
-            elif clean in ["slot", "commercial_slot", "slot_type", "inventory_slot", "timing", "type"]:
+            elif clean in ["slot", "commercial_slot", "slot_type", "inventory_slot", "timing", "type", "booking_category", "category"]:
                 col_map[c] = "commercial_slot"
             elif clean in ["person_count", "guest_count", "guests", "no_of_guests", "persons", "pax", "people", "count"]:
                 col_map[c] = "person_count"
@@ -451,6 +993,7 @@ class FeatureEngineer:
                 col_map[c] = clean
         
         df.rename(columns=col_map, inplace=True)
+        df = df.loc[:, ~df.columns.duplicated()]
 
         if "selling_price" not in df.columns:
             for c in df.columns:
@@ -489,14 +1032,174 @@ class FeatureEngineer:
             if col_to_drop in df.columns:
                 df.drop(columns=[col_to_drop], inplace=True)
 
+        # Call compute_advanced_time_series_features to get advanced rolling features (lags, occupancy)
+        if len(df) >= 2:
+            df = cls.compute_advanced_time_series_features(df)
+
         # Automatically discover business insights before extracting row features (Phase 5)
-        if len(df) > 5:
+        if len(df) > 5 and not is_prediction:
             BusinessInsightDiscoverer.discover_and_save_insights(df)
 
-        features_list = [FeatureEngineer.extract_features_from_dict(row.to_dict()) for _, row in df.iterrows()]
-        features_df = pd.DataFrame(features_list)
+        # Optimize: if _is_prediction_row is present, only extract features for the new prediction targets
+        if "_is_prediction_row" in df.columns:
+            target_mask = df["_is_prediction_row"] == True
+            df_targets = df[target_mask].copy()
+            df_history = df[~target_mask].copy()
+            
+            features_list = [FeatureEngineer.extract_features_from_dict(row.to_dict()) for _, row in df_targets.iterrows()]
+            features_df = pd.DataFrame(features_list)
+            
+            raw_inputs = ["booking_date", "commercial_slot", "slot_type", "selling_price", "person_count", "duration_hours", "lead_days", "competitor_price", "_is_prediction_row"]
+            drop_cols = [c for c in df_targets.columns if c in features_df.columns and c not in raw_inputs]
+            df_targets_clean = df_targets.drop(columns=drop_cols).reset_index(drop=True)
+            
+            # Clean duplicate columns to prevent pandas InvalidIndexError during vertical concatenation
+            dup_cols = [c for c in features_df.columns if c in df_targets_clean.columns]
+            features_df_clean = features_df.drop(columns=dup_cols)
+            
+            processed_targets = pd.concat([df_targets_clean, features_df_clean], axis=1)
+            combined_df = pd.concat([df_history, processed_targets], ignore_index=True)
+            combined_df = combined_df.loc[:, ~combined_df.columns.duplicated()]
+        else:
+            features_list = [FeatureEngineer.extract_features_from_dict(row.to_dict()) for _, row in df.iterrows()]
+            features_df = pd.DataFrame(features_list)
+            
+            raw_inputs = ["booking_date", "commercial_slot", "slot_type", "selling_price", "person_count", "duration_hours", "lead_days", "competitor_price"]
+            drop_cols = [c for c in df.columns if c in features_df.columns and c not in raw_inputs]
+            df_clean = df.drop(columns=drop_cols).reset_index(drop=True)
+            
+            combined_df = pd.concat([df_clean, features_df], axis=1)
+            combined_df = combined_df.loc[:, ~combined_df.columns.duplicated()]
 
-        combined_df = pd.concat([df.reset_index(drop=True), features_df], axis=1)
-        combined_df = combined_df.loc[:, ~combined_df.columns.duplicated()]
-
+        # V2 Data-Driven Hierarchical Pricing System (Leakage-Free LOO Target Encoding)
+        # Ensure all grouping/target columns are numeric
+        combined_df = combined_df.copy()
+        combined_df["month"] = pd.to_numeric(combined_df["month"], errors="coerce").fillna(6).astype(int)
+        combined_df["is_weekend"] = pd.to_numeric(combined_df["is_weekend"], errors="coerce").fillna(0).astype(int)
+        combined_df["is_festival"] = pd.to_numeric(combined_df["is_festival"], errors="coerce").fillna(0).astype(int)
+        combined_df["person_count"] = pd.to_numeric(combined_df["person_count"], errors="coerce").fillna(4).astype(int)
+        combined_df["lead_days"] = pd.to_numeric(combined_df["lead_days"], errors="coerce").fillna(7).astype(int)
+        combined_df["rain_probability"] = pd.to_numeric(combined_df["rain_probability"], errors="coerce").fillna(20.0).astype(float)
+        combined_df["selling_price"] = pd.to_numeric(combined_df["selling_price"], errors="coerce").fillna(8500.0).astype(float)
+        
+        # Define hierarchical matching buckets
+        combined_df["guest_bucket"] = np.where(combined_df["person_count"] <= 2, 1,
+                                      np.where(combined_df["person_count"] <= 8, 2,
+                                      np.where(combined_df["person_count"] <= 15, 3, 4)))
+        
+        combined_df["lead_bucket"] = np.where(combined_df["lead_days"] <= 3, 1,
+                                     np.where(combined_df["lead_days"] <= 14, 2, 3))
+        
+        combined_df["rain_bucket"] = np.where(combined_df["rain_probability"] > 30.0, 1, 0)
+        
+        combined_df["festival_tier"] = np.where(combined_df["is_festival"] == 0, 0,
+                                       np.where(combined_df["festival_importance_score"] < 0.6, 1, 2))
+                                       
+        combined_df["season"] = np.where(combined_df["month"].isin([3, 4, 5]), "summer",
+                                np.where(combined_df["month"].isin([6, 7, 8, 9, 10]), "monsoon", "winter"))
+                                
+        # Calculate overall and slot fallbacks
+        y_val = combined_df["selling_price"].values
+        total_sum = y_val.sum()
+        total_count = len(combined_df)
+        
+        if is_prediction and "_is_prediction_row" in combined_df.columns:
+            is_pred_target = combined_df["_is_prediction_row"].values.astype(bool)
+            hist_y = y_val[~is_pred_target]
+            hist_sum = hist_y.sum()
+            hist_count = len(hist_y)
+            overall_sum_adj = np.where(is_pred_target, hist_sum, hist_sum - y_val)
+            overall_cnt_adj = np.where(is_pred_target, hist_count, hist_count - 1)
+        else:
+            overall_sum_adj = total_sum - y_val
+            overall_cnt_adj = total_count - 1
+            
+        l8_mean = np.where(overall_cnt_adj > 0, overall_sum_adj / overall_cnt_adj, 8500.0)
+        l8_count = overall_cnt_adj
+        
+        # Level 7: Slot only
+        l7_mean, l7_count = cls.compute_loo_group_metrics(combined_df, ["slot_type"], "selling_price", is_prediction)
+        
+        # Level 6: Slot + Month
+        l6_mean, l6_count = cls.compute_loo_group_metrics(combined_df, ["slot_type", "month"], "selling_price", is_prediction)
+        
+        # Level 5: Slot + Month + Weekend/Weekday
+        l5_mean, l5_count = cls.compute_loo_group_metrics(combined_df, ["slot_type", "month", "is_weekend"], "selling_price", is_prediction)
+        
+        # Level 4: Slot + Month + Weekend/Weekday + Guest Bucket
+        l4_mean, l4_count = cls.compute_loo_group_metrics(combined_df, ["slot_type", "month", "is_weekend", "guest_bucket"], "selling_price", is_prediction)
+        
+        # Level 3: Slot + Month + Weekend/Weekday + Guest Bucket + Festival Tier
+        l3_mean, l3_count = cls.compute_loo_group_metrics(combined_df, ["slot_type", "month", "is_weekend", "guest_bucket", "festival_tier"], "selling_price", is_prediction)
+        
+        # Level 2: Slot + Month + Weekend/Weekday + Guest Bucket + Festival Tier + Lead Time Bucket
+        l2_mean, l2_count = cls.compute_loo_group_metrics(
+            combined_df, ["slot_type", "month", "is_weekend", "guest_bucket", "festival_tier", "lead_bucket"], "selling_price", is_prediction
+        )
+        
+        # Level 1: Slot + Month + Weekend/Weekday + Guest Bucket + Festival Tier + Lead Time Bucket + Weather Pattern
+        l1_mean, l1_count = cls.compute_loo_group_metrics(
+            combined_df, ["slot_type", "month", "is_weekend", "guest_bucket", "festival_tier", "lead_bucket", "rain_bucket"], "selling_price", is_prediction
+        )
+        
+        # Traversing the matching chain for hierarchical fallback mean (min_samples = 3)
+        MIN_RECORDS = 3
+        final_mean = l8_mean
+        final_level = np.full(len(combined_df), 8, dtype=int)
+        final_count = l8_count
+        
+        levels_data = [
+            (7, l7_mean, l7_count),
+            (6, l6_mean, l6_count),
+            (5, l5_mean, l5_count),
+            (4, l4_mean, l4_count),
+            (3, l3_mean, l3_count),
+            (2, l2_mean, l2_count),
+            (1, l1_mean, l1_count)
+        ]
+        
+        for lvl_idx, lvl_mean, lvl_count in levels_data:
+            mask = lvl_count >= MIN_RECORDS
+            final_mean = np.where(mask, lvl_mean, final_mean)
+            final_level = np.where(mask, lvl_idx, final_level)
+            final_count = np.where(mask, lvl_count, final_count)
+            
+        combined_df["hierarchical_fallback_avg"] = final_mean
+        
+        # Confidence score mapping:
+        # base_conf = {1: 0.90, 2: 0.80, 3: 0.70, 4: 0.60, 5: 0.50, 6: 0.40, 7: 0.30, 8: 0.10}
+        base_conf_map = np.array([0.0, 0.90, 0.80, 0.70, 0.60, 0.50, 0.40, 0.30, 0.10])
+        base_confs = base_conf_map[final_level]
+        
+        # Calculate adjustment based on sample count
+        count_adj = 0.10 * np.minimum(1.0, (final_count - 3) / 10.0)
+        count_adj = np.where(final_level == 8, 0.10 * np.minimum(1.0, final_count / 10.0), count_adj)
+        
+        combined_df["hierarchical_confidence_score"] = base_confs + count_adj
+        combined_df["hierarchical_matched_level"] = final_level
+        
+        # Compute individual leakage-free segment averages
+        slot_fallback = np.where(l7_count > 0, l7_mean, l8_mean)
+        
+        # month_slot_avg (Same Month + Same Slot)
+        combined_df["month_slot_avg"] = np.where(l6_count > 0, l6_mean, slot_fallback)
+        
+        m_we_mean, m_we_count = cls.compute_loo_group_metrics(combined_df, ["month", "is_weekend", "slot_type"], "selling_price", is_prediction)
+        combined_df["month_weekend_slot_avg"] = np.where(m_we_count > 0, m_we_mean, combined_df["month_slot_avg"].values)
+        
+        m_g_mean, m_g_count = cls.compute_loo_group_metrics(combined_df, ["month", "guest_bucket", "slot_type"], "selling_price", is_prediction)
+        combined_df["month_guest_slot_avg"] = np.where(m_g_count > 0, m_g_mean, combined_df["month_slot_avg"].values)
+        
+        m_f_mean, m_f_count = cls.compute_loo_group_metrics(combined_df, ["month", "is_festival", "slot_type"], "selling_price", is_prediction)
+        combined_df["month_festival_slot_avg"] = np.where(m_f_count > 0, m_f_mean, combined_df["month_slot_avg"].values)
+        
+        m_l_mean, m_l_count = cls.compute_loo_group_metrics(combined_df, ["month", "lead_bucket", "slot_type"], "selling_price", is_prediction)
+        combined_df["month_leadtime_slot_avg"] = np.where(m_l_count > 0, m_l_mean, combined_df["month_slot_avg"].values)
+        
+        m_w_mean, m_w_count = cls.compute_loo_group_metrics(combined_df, ["month", "rain_bucket", "slot_type"], "selling_price", is_prediction)
+        combined_df["month_weather_slot_avg"] = np.where(m_w_count > 0, m_w_mean, combined_df["month_slot_avg"].values)
+        
+        # Drop temporary LOO / bucket columns to keep dataset clean
+        combined_df.drop(columns=["guest_bucket", "lead_bucket", "rain_bucket", "festival_tier", "season_monsoon", "season_summer", "season_winter"], inplace=True)
+        
         return combined_df

@@ -39,7 +39,7 @@ async def preview_upload_file(file: UploadFile = File(...)):
         
         suggested_price = next((c for c in columns if any(k in c.lower() for k in ["selling_price", "price", "rent", "farm_price", "booked_price", "booking_amount"])), columns[0])
         suggested_date = next((c for c in columns if any(k in c.lower() for k in ["date", "check_in", "booking_date", "checkin"])), columns[0])
-        suggested_slot = next((c for c in columns if any(k in c.lower() for k in ["slot", "timing", "type"])), None)
+        suggested_slot = next((c for c in columns if any(k in c.lower() for k in ["slot", "timing", "type", "category"])), None)
         suggested_guests = next((c for c in columns if any(k in c.lower() for k in ["guest", "person", "pax", "count"])), None)
 
         preview_rows = df.head(5).fillna("").to_dict(orient="records")
@@ -214,7 +214,8 @@ async def confirm_mapping_and_train_models(mapping: ColumnMappingRequest):
         min_price = float(clean_prices.min()) if not clean_prices.empty else 0.0
         max_price = float(clean_prices.max()) if not clean_prices.empty else 0.0
 
-        slot_dist = enriched_df["commercial_slot"].value_counts().to_dict()
+        slot_col_name = "slot_type" if "slot_type" in enriched_df.columns else "commercial_slot"
+        slot_dist = enriched_df[slot_col_name].value_counts().to_dict()
         slot_dist_clean = {str(k): int(v) for k, v in slot_dist.items()}
 
         # 2. Train models (Purges old model cache & records timestamps)
@@ -323,7 +324,8 @@ async def upload_booking_dataset_direct(file: UploadFile = File(...)):
         min_price = float(clean_prices.min()) if not clean_prices.empty else 0.0
         max_price = float(clean_prices.max()) if not clean_prices.empty else 0.0
 
-        slot_dist = enriched_df["commercial_slot"].value_counts().to_dict()
+        slot_col_name = "slot_type" if "slot_type" in enriched_df.columns else "commercial_slot"
+        slot_dist = enriched_df[slot_col_name].value_counts().to_dict()
         slot_dist_clean = {str(k): int(v) for k, v in slot_dist.items()}
 
         champion_artifact = MLTrainer.train_and_select_champion(enriched_df)

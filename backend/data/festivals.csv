@@ -64,27 +64,27 @@ date,festival_name,demand_multiplier,is_eve
 2024-12-25,Christmas,1.25,0
 2024-12-31,New Year's Eve,1.25,1
 2025-01-01,New Year,1.25,0
-2025-01-14,Makar Sankranti,1.25,0
+2025-01-14,Makar Sankranti,1.95,0
 2025-01-26,Republic Day,1.25,0
-2025-03-14,Holi,1.25,0
-2025-03-15,Dhuleti,1.25,0
+2025-03-14,Holi,2.25,0
+2025-03-15,Dhuleti,2.25,0
 2025-03-29,Eid-ul-Fitr,1.25,0
 2025-04-06,Ram Navami,1.25,0
 2025-08-15,Independence Day,1.25,0
 2025-08-27,Ganesh Chaturthi,1.25,0
-2025-10-20,Diwali,1.25,0
+2025-10-20,Diwali,1.95,0
 2025-10-21,Bestu Varas,1.25,0
 2025-12-25,Christmas,1.25,0
 2025-12-31,New Year's Eve,1.25,1
 2026-01-01,New Year,1.25,0
-2026-01-14,Makar Sankranti,1.25,0
+2026-01-14,Makar Sankranti,1.95,0
 2026-01-26,Republic Day,1.25,0
-2026-03-04,Holi,1.25,0
-2026-03-05,Dhuleti,1.25,0
+2026-03-04,Holi,2.25,0
+2026-03-05,Dhuleti,2.25,0
 2026-03-20,Ram Navami,1.25,0
 2026-08-15,Independence Day,1.25,0
 2026-09-15,Ganesh Chaturthi,1.25,0
-2026-11-08,Diwali,1.25,0
+2026-11-08,Diwali,1.95,0
 2026-11-09,Bestu Varas,1.25,0
 2026-12-25,Christmas,1.25,0
 2026-12-31,New Year's Eve,1.25,1

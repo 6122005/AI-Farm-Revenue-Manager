@@ -1,7 +1,7 @@
 import React from 'react';
 import { LayoutDashboard, TrendingUp, UploadCloud, History, Settings, ShieldCheck } from 'lucide-react';
 
-export type NavTab = 'dashboard' | 'predict' | 'upload' | 'feedback' | 'settings';
+export type NavTab = 'dashboard' | 'predict' | 'upload' | 'feedback' | 'settings' | 'audit';
 
 interface SidebarProps {
   activeTab: NavTab;
@@ -12,6 +12,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => 
   const items = [
     { id: 'dashboard' as NavTab, label: 'Dashboard', icon: LayoutDashboard },
     { id: 'predict' as NavTab, label: 'Price Predictor', icon: TrendingUp },
+    { id: 'audit' as NavTab, label: 'Prediction Audit', icon: ShieldCheck },
     { id: 'upload' as NavTab, label: 'Data & Retraining', icon: UploadCloud },
     { id: 'feedback' as NavTab, label: 'Override Audit Logs', icon: History },
     { id: 'settings' as NavTab, label: 'Slot Config & Models', icon: Settings },

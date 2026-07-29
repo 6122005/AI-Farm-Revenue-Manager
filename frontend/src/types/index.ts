@@ -17,6 +17,7 @@ export interface PriceFactor {
 export interface SimilarBooking {
   booking_date: string;
   commercial_slot: string;
+  slot_type?: string;
   person_count: number;
   lead_days: number;
   selling_price: number;
@@ -30,7 +31,10 @@ export interface PredictionRequest {
   end_datetime?: string;
   booking_date?: string;
   commercial_slot: string;
+  slot_type?: string;
   person_count: number;
+  is_couple?: boolean;
+  extended_stay?: boolean;
   lead_days: number;
   competitor_price?: number;
 }
@@ -68,6 +72,9 @@ export interface PredictionResponse {
   similar_bookings_count?: number;
   expected_occupancy_pct: number;
   commercial_slot: string;
+  slot_type?: string;
+  is_couple?: boolean;
+  extended_stay?: boolean;
   booking_date: string;
   start_datetime: string;
   end_datetime: string;
@@ -102,6 +109,32 @@ export interface PredictionResponse {
     drifted_features?: string[];
     recommendation?: string;
   };
+  
+  // V2 properties
+  optimization_table?: Array<{
+    price: number;
+    booking_probability: number;
+    expected_revenue: number;
+    price_ratio: number;
+  }>;
+  explainable_breakdown?: {
+    base_price: number;
+    weekend_adjustment: number;
+    festival_adjustment: number;
+    lead_time_adjustment: number;
+    occupancy_adjustment: number;
+    competitor_adjustment: number;
+    weather_adjustment: number;
+    demand_adjustment: number;
+    optimization_uplift: number;
+    final_recommended_price: number;
+  };
+  demand_index?: number;
+  current_occupancy_pct?: number;
+  remaining_inventory?: number;
+  booking_pace?: number;
+  occupancy_trend?: number;
+  revenue_uplift_pct?: number;
 }
 
 export interface ModelVersion {

@@ -41,10 +41,20 @@ class PredictionRequest(BaseModel):
     start_datetime: Optional[str] = Field(None, example="2025-10-22 19:00", description="Booking Start Date & Time")
     end_datetime: Optional[str] = Field(None, example="2025-10-23 18:00", description="Booking End Date & Time")
     booking_date: Optional[str] = Field(None, example="2025-10-22", description="Target booking date YYYY-MM-DD")
-    commercial_slot: str = Field("12H_DAY", example="12H_DAY", description="Commercial slot code")
-    person_count: int = Field(2, ge=1, le=100, example=2, description="Number of guests")
-    lead_days: Optional[int] = Field(None, ge=0, example=7, description="Lead days prior to booking (Auto-calculated if omitted)")
-    competitor_price: Optional[float] = Field(0.0, example=0.0, description="Competitor price for comparison (Default 0)")
+    commercial_slot: Optional[str] = Field("12H Day", example="12H Day", description="Backwards compatibility alias for slot_type")
+    slot_type: Optional[str] = Field("12H Day", example="12H Day", description="Allowed values: 12H Day, 12H Night, 24H Day, 24H Night")
+    person_count: int = Field(4, ge=1, le=100, example=4, description="Number of guests")
+    is_couple: Optional[bool] = Field(False, description="Couple Booking (person_count == 2)")
+    extended_stay: Optional[bool] = Field(False, description="Extended Stay (duration > 24)")
+    lead_days: Optional[int] = Field(None, ge=0, example=7, description="Lead days prior to booking")
+    competitor_price: Optional[float] = Field(0.0, example=0.0, description="Competitor price")
+    
+    event_type: Optional[str] = Field(None, description="Event type")
+    extra_services: Optional[List[str]] = Field(default_factory=list, description="Requested services list")
+    package_type: Optional[str] = Field("Standard", description="Package level")
+    demand_level: Optional[str] = Field(None, description="Demand override level")
+    festival_name: Optional[str] = Field(None, description="Festival name")
+    special_event_override: Optional[bool] = Field(False, description="Manual special event override")
 
 class PriceFactor(BaseModel):
     factor: str
@@ -55,6 +65,7 @@ class PriceFactor(BaseModel):
 class SimilarBooking(BaseModel):
     booking_date: str
     commercial_slot: str
+    slot_type: Optional[str] = None
     person_count: int
     lead_days: int
     selling_price: float
@@ -99,6 +110,9 @@ class PredictionResponse(BaseModel):
     similar_bookings_count: Optional[int] = 4
     expected_occupancy_pct: float
     commercial_slot: str
+    slot_type: Optional[str] = None
+    is_couple: Optional[bool] = False
+    extended_stay: Optional[bool] = False
     booking_date: str
     start_datetime: str
     end_datetime: str
@@ -119,6 +133,11 @@ class PredictionResponse(BaseModel):
     historical_price_explanation: Optional[str] = None
     multi_slot_consistency: Optional[MultiSlotConsistency] = None
     drift_status: Optional[Dict[str, Any]] = None
+    
+    base_ml_price: Optional[float] = None
+    business_adjustments: Optional[List[Dict[str, Any]]] = None
+    pricing_source: Optional[str] = None
+    final_price: Optional[float] = None
 
 class RollbackRequest(BaseModel):
     version_id: str = Field(..., description="Timestamp version ID to rollback to")
@@ -156,7 +175,8 @@ class AuditProofResponse(BaseModel):
 
 class OwnerFeedbackCreate(BaseModel):
     booking_date: str
-    commercial_slot: str
+    commercial_slot: Optional[str] = None
+    slot_type: Optional[str] = None
     person_count: int
     lead_days: int
     suggested_price: float
@@ -199,3 +219,16 @@ class ModelMetricResponse(BaseModel):
     is_champion: bool
     trained_at: datetime
     feature_importances: Optional[Dict[str, float]] = None
+
+class LeadDaysRuleSchema(BaseModel):
+    id: Optional[int] = None
+    min_days: int
+    max_days: int
+    adjustment_pct: float
+    description: Optional[str] = None
+    is_active: bool = True
+
+class SystemSettingSchema(BaseModel):
+    key: str
+    value: str
+    description: Optional[str] = None

@@ -43,19 +43,19 @@ export const Predict: React.FC = () => {
 
       const end = new Date(start);
 
-      if (slot === '12H_DAY' || slot === 'COUPLE_DAY') {
+      if (slot === '12H Day') {
         end.setHours(19, 0, 0, 0);
         if (end <= start) end.setDate(end.getDate() + 1);
-      } else if (slot === '12H_NIGHT' || slot === 'COUPLE_NIGHT') {
+      } else if (slot === '12H Night') {
         start.setHours(19, 0, 0, 0);
         end.setTime(start.getTime());
         end.setDate(end.getDate() + 1);
         end.setHours(7, 0, 0, 0);
-      } else if (slot === '24H_DAY') {
+      } else if (slot === '24H Day') {
         start.setHours(7, 0, 0, 0);
         end.setTime(start.getTime());
         end.setDate(end.getDate() + 1);
-      } else if (slot === '24H_NIGHT') {
+      } else if (slot === '24H Night') {
         start.setHours(19, 0, 0, 0);
         end.setTime(start.getTime());
         end.setDate(end.getDate() + 1);
@@ -70,13 +70,13 @@ export const Predict: React.FC = () => {
   };
 
   const initialStart = getInitialStartDT();
-  const initialEnd = calcAutoEndDT(initialStart, '12H_DAY');
+  const initialEnd = calcAutoEndDT(initialStart, '12H Day');
 
   const [form, setForm] = useState<PredictionRequest>({
     start_datetime: initialStart,
     end_datetime: initialEnd,
-    commercial_slot: '12H_DAY',
-    person_count: 2,
+    commercial_slot: '12H Day',
+    person_count: 4,
     lead_days: 0,
     competitor_price: 0
   });
@@ -134,8 +134,7 @@ export const Predict: React.FC = () => {
     setForm((prev) => ({
       ...prev,
       commercial_slot: newSlot,
-      end_datetime: newEnd,
-      person_count: newSlot.includes('COUPLE') ? 2 : prev.person_count
+      end_datetime: newEnd
     }));
   };
 
@@ -193,13 +192,10 @@ export const Predict: React.FC = () => {
 
   const getSlotName = (code: string) => {
     switch (code) {
-      case 'COUPLE_SLOT': return 'Couple Special (2 Guests)';
-      case 'COUPLE_DAY': return 'Couple Slot Day (7 AM - 7 PM)';
-      case 'COUPLE_NIGHT': return 'Couple Slot Night (7 PM - 7 AM)';
-      case '12H_DAY': return '12 Hour Day (7 AM - 7 PM)';
-      case '12H_NIGHT': return '12 Hour Night (7 PM - 7 AM)';
-      case '24H_DAY': return '24 Hour Day (7 AM - 7 AM)';
-      case '24H_NIGHT': return '24 Hour Night (7 PM - 7 PM)';
+      case '12H Day': return '12 Hour Day (7 AM - 7 PM)';
+      case '12H Night': return '12 Hour Night (7 PM - 7 AM)';
+      case '24H Day': return '24 Hour Day (7 AM - 7 AM)';
+      case '24H Night': return '24 Hour Night (7 PM - 7 PM)';
       default: return code;
     }
   };
@@ -241,16 +237,29 @@ export const Predict: React.FC = () => {
               <select
                 value={form.commercial_slot}
                 onChange={(e) => handleSlotChange(e.target.value)}
-                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none font-medium text-xs"
+                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none font-medium text-xs mb-2"
               >
-                <option value="COUPLE_SLOT">Couple Special (2 Guests)</option>
-                <option value="COUPLE_DAY">Couple Slot Day (7 AM to 7 PM)</option>
-                <option value="COUPLE_NIGHT">Couple Slot Night (7 PM to 7 AM)</option>
-                <option value="12H_DAY">12 Hour Day (7 AM to 7 PM)</option>
-                <option value="12H_NIGHT">12 Hour Night (7 PM to 7 AM)</option>
-                <option value="24H_DAY">24 Hour Day (7 AM to 7 AM)</option>
-                <option value="24H_NIGHT">24 Hour Night (7 PM to 7 PM)</option>
+                <option value="12H Day">12H Day</option>
+                <option value="12H Night">12H Night</option>
+                <option value="24H Day">24H Day</option>
+                <option value="24H Night">24H Night</option>
               </select>
+
+              {/* Dynamic Badges Overlay */}
+              <div className="flex flex-wrap gap-2 mt-2">
+                {form.person_count === 2 && (
+                  <span className="px-2.5 py-1 rounded-lg bg-rose-100 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 font-extrabold text-[10px] uppercase tracking-wider animate-pulse flex items-center space-x-1">
+                    <Users className="w-3 h-3" />
+                    <span>Couple Booking</span>
+                  </span>
+                )}
+                {durationHours > 24 && (
+                  <span className="px-2.5 py-1 rounded-lg bg-blue-100 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 font-extrabold text-[10px] uppercase tracking-wider flex items-center space-x-1">
+                    <Clock className="w-3 h-3" />
+                    <span>Extended Stay</span>
+                  </span>
+                )}
+              </div>
             </div>
 
             {/* Start Date & Time */}
@@ -751,6 +760,168 @@ export const Predict: React.FC = () => {
                   ))}
                 </div>
               </div>
+
+              {/* V2 Revenue Management Explainable Breakdown Card */}
+              {prediction.explainable_breakdown && (
+                <div className="glass-card p-5 space-y-4">
+                  <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
+                    <div className="flex items-center space-x-2">
+                      <Zap className="w-5 h-5 text-emerald-500" />
+                      <h3 className="font-bold text-slate-900 dark:text-white text-sm">
+                        Revenue Management Pricing Waterfall (V2)
+                      </h3>
+                    </div>
+                    <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-100 dark:bg-emerald-950/60 px-2 py-0.5 rounded-lg">
+                      Uplift: +{prediction.revenue_uplift_pct}%
+                    </span>
+                  </div>
+
+                  <div className="space-y-2 text-xs">
+                    <div className="flex justify-between py-1.5 border-b border-slate-100 dark:border-slate-800/40">
+                      <span className="text-slate-500">Base Machine Learning Price:</span>
+                      <span className="font-extrabold text-slate-800 dark:text-slate-200">₹{prediction.explainable_breakdown.base_price.toLocaleString('en-IN')}</span>
+                    </div>
+                    <div className="flex justify-between py-1.5 border-b border-slate-100 dark:border-slate-800/40">
+                      <span className="text-slate-500">Weekend Premium Adjustment:</span>
+                      <span className={`font-bold ${prediction.explainable_breakdown.weekend_adjustment >= 0 ? 'text-emerald-600' : 'text-rose-500'}`}>
+                        {prediction.explainable_breakdown.weekend_adjustment >= 0 ? '+' : ''}₹{prediction.explainable_breakdown.weekend_adjustment.toLocaleString('en-IN')}
+                      </span>
+                    </div>
+                    <div className="flex justify-between py-1.5 border-b border-slate-100 dark:border-slate-800/40">
+                      <span className="text-slate-500">Festival & Event Adjustment:</span>
+                      <span className={`font-bold ${prediction.explainable_breakdown.festival_adjustment >= 0 ? 'text-emerald-600' : 'text-rose-500'}`}>
+                        {prediction.explainable_breakdown.festival_adjustment >= 0 ? '+' : ''}₹{prediction.explainable_breakdown.festival_adjustment.toLocaleString('en-IN')}
+                      </span>
+                    </div>
+                    <div className="flex justify-between py-1.5 border-b border-slate-100 dark:border-slate-800/40">
+                      <span className="text-slate-500">Lead Time Booking Window Adj:</span>
+                      <span className={`font-bold ${prediction.explainable_breakdown.lead_time_adjustment >= 0 ? 'text-emerald-600' : 'text-rose-500'}`}>
+                        {prediction.explainable_breakdown.lead_time_adjustment >= 0 ? '+' : ''}₹{prediction.explainable_breakdown.lead_time_adjustment.toLocaleString('en-IN')}
+                      </span>
+                    </div>
+                    <div className="flex justify-between py-1.5 border-b border-slate-100 dark:border-slate-800/40">
+                      <span className="text-slate-500">Occupancy Level Surcharge:</span>
+                      <span className={`font-bold ${prediction.explainable_breakdown.occupancy_adjustment >= 0 ? 'text-emerald-600' : 'text-rose-500'}`}>
+                        {prediction.explainable_breakdown.occupancy_adjustment >= 0 ? '+' : ''}₹{prediction.explainable_breakdown.occupancy_adjustment.toLocaleString('en-IN')}
+                      </span>
+                    </div>
+                    <div className="flex justify-between py-1.5 border-b border-slate-100 dark:border-slate-800/40">
+                      <span className="text-slate-500">Competitor Positioning Adjustment:</span>
+                      <span className={`font-bold ${prediction.explainable_breakdown.competitor_adjustment >= 0 ? 'text-emerald-600' : 'text-rose-500'}`}>
+                        {prediction.explainable_breakdown.competitor_adjustment >= 0 ? '+' : ''}₹{prediction.explainable_breakdown.competitor_adjustment.toLocaleString('en-IN')}
+                      </span>
+                    </div>
+                    <div className="flex justify-between py-1.5 border-b border-slate-100 dark:border-slate-800/40">
+                      <span className="text-slate-500">Weather Forecast Penalty:</span>
+                      <span className={`font-bold ${prediction.explainable_breakdown.weather_adjustment >= 0 ? 'text-emerald-600' : 'text-rose-500'}`}>
+                        {prediction.explainable_breakdown.weather_adjustment >= 0 ? '+' : ''}₹{prediction.explainable_breakdown.weather_adjustment.toLocaleString('en-IN')}
+                      </span>
+                    </div>
+                    <div className="flex justify-between py-1.5 border-b border-slate-100 dark:border-slate-800/40">
+                      <span className="text-slate-500">Market Demand Index Surcharge:</span>
+                      <span className={`font-bold ${prediction.explainable_breakdown.demand_adjustment >= 0 ? 'text-emerald-600' : 'text-rose-500'}`}>
+                        {prediction.explainable_breakdown.demand_adjustment >= 0 ? '+' : ''}₹{prediction.explainable_breakdown.demand_adjustment.toLocaleString('en-IN')}
+                      </span>
+                    </div>
+                    <div className="flex justify-between py-1.5 border-b border-slate-100 dark:border-slate-800/40">
+                      <span className="text-slate-500">Expected Revenue Optimization Lift:</span>
+                      <span className={`font-bold ${prediction.explainable_breakdown.optimization_uplift >= 0 ? 'text-emerald-600' : 'text-rose-500'}`}>
+                        {prediction.explainable_breakdown.optimization_uplift >= 0 ? '+' : ''}₹{prediction.explainable_breakdown.optimization_uplift.toLocaleString('en-IN')}
+                      </span>
+                    </div>
+                    <div className="flex justify-between py-2 text-sm font-extrabold text-slate-900 dark:text-white pt-3 border-t border-slate-200 dark:border-slate-800 mt-2">
+                      <span>Calibrated Recommended Price:</span>
+                      <span className="text-emerald-600 dark:text-emerald-400">₹{prediction.recommended_price.toLocaleString('en-IN')}</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* V2 Demand Curve & Optimization Simulation Card */}
+              {prediction.optimization_table && (
+                <div className="glass-card p-5 space-y-4">
+                  <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
+                    <div className="flex items-center space-x-2">
+                      <TrendingUp className="w-5 h-5 text-emerald-500" />
+                      <h3 className="font-bold text-slate-900 dark:text-white text-sm">
+                        Expected Revenue Optimization Simulation
+                      </h3>
+                    </div>
+                    <div className="text-[10px] uppercase font-extrabold px-2 py-0.5 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded">
+                      Demand Index: {prediction.demand_index}/100
+                    </div>
+                  </div>
+
+                  {/* Summary Indicators */}
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                    <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/40">
+                      <span className="text-slate-400 text-[10px] block">Current Occupancy</span>
+                      <span className="font-extrabold text-slate-800 dark:text-slate-200">
+                        {Math.round((prediction.current_occupancy_pct || 0) * 100)}%
+                      </span>
+                    </div>
+                    <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/40">
+                      <span className="text-slate-400 text-[10px] block">Remaining Inventory</span>
+                      <span className="font-extrabold text-slate-800 dark:text-slate-200">
+                        {prediction.remaining_inventory || 0} Slots
+                      </span>
+                    </div>
+                    <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/40">
+                      <span className="text-slate-400 text-[10px] block">Booking Pace</span>
+                      <span className="font-extrabold text-slate-800 dark:text-slate-200">
+                        {(prediction.booking_pace || 1.0).toFixed(1)}x
+                      </span>
+                    </div>
+                    <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/40">
+                      <span className="text-slate-400 text-[10px] block">Expected Booking Prob</span>
+                      <span className="font-extrabold text-emerald-500">
+                        {Math.round(((prediction.optimization_table || []).find((o: any) => o.price === prediction.recommended_price)?.booking_probability || 0.5) * 100)}%
+                      </span>
+                    </div>
+                  </div>
+ 
+                  {/* Demand Curve Vertical Bars Visualization */}
+                  <div className="pt-4 space-y-3">
+                    <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 block">
+                      Expected Revenue Chart (Simulated Candidate Prices)
+                    </label>
+                    <div className="h-44 w-full bg-slate-100/60 dark:bg-slate-850/20 border border-slate-200 dark:border-slate-800/60 rounded-xl p-4 flex items-end justify-between relative">
+                      {(prediction.optimization_table || []).map((opt: any, idx: number) => {
+                        const maxRevenue = Math.max(...(prediction.optimization_table || []).map((o: any) => o.expected_revenue));
+                        const heightPct = maxRevenue > 0 ? (opt.expected_revenue / maxRevenue) * 90 : 0;
+                        const isOptimal = opt.price === prediction.recommended_price;
+                        
+                        return (
+                          <div key={idx} className="flex-1 flex flex-col items-center group relative cursor-pointer mx-0.5">
+                            {/* Hover tooltip */}
+                            <div className="absolute bottom-full mb-2 hidden group-hover:block z-20 w-32 p-2 rounded-lg bg-slate-900 text-white text-[9.5px] leading-tight text-center shadow-lg">
+                              Price: ₹{opt.price.toLocaleString('en-IN')}<br/>
+                              Prob: {Math.round(opt.booking_probability * 100)}%<br/>
+                              Exp Rev: ₹{Math.round(opt.expected_revenue).toLocaleString('en-IN')}
+                            </div>
+                            
+                            {/* Bar representing Expected Revenue */}
+                            <div
+                              style={{ height: `${heightPct}%` }}
+                              className={`w-full rounded-t-md transition-all duration-300 ${
+                                isOptimal
+                                  ? 'bg-emerald-500 shadow-md shadow-emerald-500/30'
+                                  : 'bg-slate-400/40 hover:bg-slate-500/60'
+                              }`}
+                            ></div>
+                            <span className="text-[8px] text-slate-400 font-mono mt-1.5 rotate-45 origin-left">
+                              {opt.price_ratio.toFixed(2)}x
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <p className="text-[10px] text-slate-400 italic text-center pt-2">
+                      x-axis shows candidate price ratios relative to base ML prediction. Green bar indicates optimal expected revenue recommendation.
+                    </p>
+                  </div>
+                </div>
+              )}
 
               {/* Historical Price Derivation Explanation Card */}
               {prediction.historical_price_explanation && (

@@ -7,6 +7,7 @@ import { Predict } from './pages/Predict';
 import { DataUpload } from './pages/DataUpload';
 import { FeedbackLogs } from './pages/FeedbackLogs';
 import { Settings } from './pages/Settings';
+import { Audit } from './pages/Audit';
 
 export function App() {
   const [darkMode, setDarkMode] = useState(true);
@@ -41,6 +42,7 @@ export function App() {
         <main className="flex-1 p-6 max-w-7xl mx-auto w-full">
           {activeTab === 'dashboard' && <Dashboard />}
           {activeTab === 'predict' && <Predict />}
+          {activeTab === 'audit' && <Audit />}
           {activeTab === 'upload' && <DataUpload />}
           {activeTab === 'feedback' && <FeedbackLogs />}
           {activeTab === 'settings' && <Settings />}

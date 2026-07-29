@@ -52,8 +52,20 @@ export const api = {
     return res.data;
   },
 
+  getValidationDashboard: async (): Promise<any> => {
+    const res = await client.get('/dashboard/validation');
+    return res.data;
+  },
+
   predictPrice: async (req: PredictionRequest): Promise<PredictionResponse> => {
     const res = await client.post('/predict', req);
+    return res.data;
+  },
+
+  auditPrediction: async (rowIndex: number): Promise<any> => {
+    const res = await client.get('/predict/audit', {
+      params: { row_index: rowIndex }
+    });
     return res.data;
   },
 
@@ -127,6 +139,26 @@ export const api = {
 
   getModelMetrics: async (): Promise<ModelMetric[]> => {
     const res = await client.get('/model-info');
+    return res.data;
+  },
+
+  getLeadRules: async (): Promise<any[]> => {
+    const res = await client.get('/lead-rules');
+    return res.data;
+  },
+
+  updateLeadRules: async (rules: any[]): Promise<any> => {
+    const res = await client.post('/lead-rules', rules);
+    return res.data;
+  },
+
+  getSettings: async (): Promise<any[]> => {
+    const res = await client.get('/settings');
+    return res.data;
+  },
+
+  updateSettings: async (settings: any[]): Promise<any> => {
+    const res = await client.post('/settings', settings);
     return res.data;
   }
 };

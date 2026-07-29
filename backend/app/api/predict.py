@@ -26,3 +26,13 @@ async def get_weather_preview(booking_date: str = "2025-10-22"):
         return weather_service.get_forecast(booking_date)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch weather forecast: {str(e)}")
+
+@router.get("/audit")
+async def get_prediction_audit(row_index: int = 0):
+    """
+    Returns complete forensic analysis for a specific booking by row index.
+    """
+    try:
+        return prediction_engine.audit_prediction(row_index)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to generate prediction audit: {str(e)}")

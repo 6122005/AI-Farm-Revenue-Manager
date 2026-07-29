@@ -1,6 +1,7 @@
 import os
 import sys
 
+os.environ["TESTING"] = "1"
 sys.path.insert(0, os.path.abspath("."))
 
 from fastapi.testclient import TestClient
@@ -20,10 +21,11 @@ def run_all_tests():
     print("✅ Root API Test Passed")
 
     # 2. Slot Engine Test
-    assert slot_engine.map_duration_to_slot(5.0, 2) in ["COUPLE_DAY", "COUPLE_NIGHT", "COUPLE_SLOT"]
-    assert slot_engine.map_duration_to_slot(10.0, 8) == "12H_DAY"
-    assert slot_engine.map_duration_to_slot(24.0, 10) == "24H_DAY"
-    assert slot_engine.classify_by_datetimes("2025-10-22 19:00", "2025-10-23 07:00", 2) == "COUPLE_NIGHT"
+    assert slot_engine.classify_booking(12, 5.0) == "12H Day"
+    assert slot_engine.classify_booking(19, 5.0) == "12H Night"
+    assert slot_engine.classify_booking(12, 24.0) == "24H Day"
+    assert slot_engine.classify_booking(19, 24.0) == "24H Night"
+    assert slot_engine.classify_by_datetimes("2025-10-22 19:00", "2025-10-23 07:00")["slot_type"] == "12H Night"
     print("✅ Commercial Slot Engine Test Passed")
 
     # 3. Default Empty Dashboard State Test
@@ -49,7 +51,7 @@ def run_all_tests():
     payload = {
         "start_datetime": "2025-10-22 19:00",
         "end_datetime": "2025-10-23 18:00",
-        "commercial_slot": "24H_NIGHT",
+        "slot_type": "24H Night",
         "person_count": 10,
         "competitor_price": 6500.0
     }
@@ -75,7 +77,7 @@ def run_all_tests():
     # 7. Feedback Audit Loop Test
     fb_payload = {
         "booking_date": "2025-10-22",
-        "commercial_slot": "24H_NIGHT",
+        "slot_type": "24H Night",
         "person_count": 10,
         "lead_days": 15,
         "suggested_price": 16000.0,

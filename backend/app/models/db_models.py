@@ -7,8 +7,10 @@ class BookingRecord(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     booking_date = Column(String, index=True) # YYYY-MM-DD
-    commercial_slot = Column(String, index=True) # COUPLE_SLOT, 6H_SLOT, 12H_SLOT, etc.
+    slot_type = Column(String, index=True) # 12H Day, 12H Night, 24H Day, 24H Night
     person_count = Column(Integer)
+    is_couple = Column(Boolean, default=False)
+    extended_stay = Column(Boolean, default=False)
     lead_days = Column(Integer)
     duration_hours = Column(Float)
     selling_price = Column(Float) # Commercial slot selling price (NOT hourly)
@@ -63,7 +65,7 @@ class OwnerFeedback(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     booking_date = Column(String)
-    commercial_slot = Column(String)
+    slot_type = Column(String)
     person_count = Column(Integer)
     lead_days = Column(Integer)
     suggested_price = Column(Float)
@@ -71,3 +73,20 @@ class OwnerFeedback(Base):
     override_price = Column(Float, nullable=True)
     reason = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+
+class LeadDaysRule(Base):
+    __tablename__ = "lead_days_rules"
+
+    id = Column(Integer, primary_key=True, index=True)
+    min_days = Column(Integer, index=True)
+    max_days = Column(Integer, index=True) # e.g. 9999 for infinity
+    adjustment_pct = Column(Float) # percentage, e.g. 20.0 for +20%
+    description = Column(String, nullable=True)
+    is_active = Column(Boolean, default=True)
+
+class SystemSetting(Base):
+    __tablename__ = "system_settings"
+
+    key = Column(String, primary_key=True, index=True)
+    value = Column(String)
+    description = Column(String, nullable=True)

@@ -11,12 +11,11 @@ router = APIRouter(prefix="/api/feedback", tags=["Feedback"])
 async def log_owner_feedback(fb: OwnerFeedbackCreate, db: Session = Depends(get_db)):
     """
     Logs owner feedback (ACCEPT, OVERRIDE, REJECT) for a price prediction.
-    Enables future retraining pipelines to learn from owner pricing decisions.
     """
     try:
         feedback_rec = OwnerFeedback(
             booking_date=fb.booking_date,
-            commercial_slot=fb.commercial_slot,
+            slot_type=fb.slot_type or fb.commercial_slot or "12H Day",
             person_count=fb.person_count,
             lead_days=fb.lead_days,
             suggested_price=fb.suggested_price,
@@ -47,7 +46,8 @@ async def get_feedback_history(db: Session = Depends(get_db)):
         {
             "id": r.id,
             "booking_date": r.booking_date,
-            "commercial_slot": r.commercial_slot,
+            "commercial_slot": r.slot_type or "12H Day",
+            "slot_type": r.slot_type or "12H Day",
             "person_count": r.person_count,
             "lead_days": r.lead_days,
             "suggested_price": r.suggested_price,

@@ -1,8 +1,140 @@
 import pandas as pd
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Callable
 
 
 class ExplainableAI:
+    @classmethod
+    def calculate_perturbation_attributions(
+        cls,
+        predict_fn: Callable[[Dict[str, Any]], float],
+        features: Dict[str, Any],
+        weather: Dict[str, Any],
+        base_slot_price: float
+    ) -> List[Dict[str, Any]]:
+        """
+        Phase 8 & 9: True Data-Driven local feature attribution.
+        Uses Single-Variable Perturbation (marginal contribution) to calculate how
+        each group of features (Lead Days, Guests, Weather, Festival, Utilization)
+        shifted the price relative to their default baseline.
+        """
+        # 1. Base Predict
+        p_actual = predict_fn(features)
+        
+        # 2. Perturb Lead Days
+        feat_lead = features.copy()
+        feat_lead["lead_days"] = 7
+        feat_lead["lead_time_bucket"] = 1
+        p_lead = predict_fn(feat_lead)
+        lead_attr = p_actual - p_lead
+
+        # 3. Perturb Person Count
+        feat_guests = features.copy()
+        feat_guests["person_count"] = 4
+        feat_guests["is_couple"] = 0
+        feat_guests["is_family"] = 1
+        feat_guests["is_corporate"] = 0
+        p_guests = predict_fn(feat_guests)
+        guests_attr = p_actual - p_guests
+
+        # 4. Perturb Weather
+        feat_weather = features.copy()
+        feat_weather["temperature"] = 26.0
+        feat_weather["rain_probability"] = 20.0
+        feat_weather["humidity"] = 60.0
+        feat_weather["wind_speed"] = 4.2
+        feat_weather["cloud_cover"] = 25.0
+        p_weather = predict_fn(feat_weather)
+        weather_attr = p_actual - p_weather
+
+        # 5. Perturb Festival
+        feat_festival = features.copy()
+        feat_festival["is_festival"] = 0
+        feat_festival["is_festival_eve"] = 0
+        feat_festival["festival_name"] = "No Festival"
+        feat_festival["is_long_weekend"] = 1 if features.get("is_weekend", 0) else 0
+        feat_festival["is_consecutive_holiday"] = 0
+        p_festival = predict_fn(feat_festival)
+        festival_attr = p_actual - p_festival
+
+        # 6. Perturb Utilization
+        feat_util = features.copy()
+        feat_util["duration_hours"] = features.get("slot_capacity_hours", 12.0)
+        feat_util["slot_utilization_ratio"] = 1.0
+        feat_util["opportunity_cost_factor"] = 1.0
+        p_util = predict_fn(feat_util)
+        util_attr = p_actual - p_util
+
+        # Calculate base market price as remainder so everything sums exactly to final predicted price
+        total_attr = lead_attr + guests_attr + weather_attr + festival_attr + util_attr
+        derived_base_price = p_actual - total_attr
+
+        factors = []
+        
+        # 1. Base Market Price
+        factors.append({
+            "factor": "Base Market Price",
+            "impact_pct": 0.0,
+            "impact_amount": float(round(derived_base_price, -2)),
+            "description": "Historical slot base price under standard baseline conditions (learned from data)."
+        })
+
+        # Helper to format description and add factor if attribution is significant
+        def add_factor(name: str, val: float, desc_template: str):
+            if abs(val) >= 50.0:
+                pct = round((val / derived_base_price) * 100.0, 1) if derived_base_price > 0 else 0.0
+                factors.append({
+                    "factor": name,
+                    "impact_pct": pct,
+                    "impact_amount": float(round(val, -2)),
+                    "description": desc_template.format(pct=pct, amt=abs(val))
+                })
+
+        # 2. Lead Days
+        add_factor(
+            "Lead Days Impact",
+            lead_attr,
+            "Lead time contribution of {pct:+.1f}% (₹{amt:,.0f}) dynamically learned from historical advance/last-minute curves."
+        )
+
+        # 3. Person Count
+        add_factor(
+            "Guest Count Impact",
+            guests_attr,
+            "Occupancy segment contribution of {pct:+.1f}% (₹{amt:,.0f}) based on group scale."
+        )
+
+        # 4. Weather
+        add_factor(
+            "Weather Condition Impact",
+            weather_attr,
+            "Weather variable contribution of {pct:+.1f}% (₹{amt:,.0f}) responding to forecast metrics."
+        )
+
+        # 5. Festival
+        add_factor(
+            "Festival/Holiday Premium",
+            festival_attr,
+            "Holiday demand contribution of {pct:+.1f}% (₹{amt:,.0f}) matching festival dates."
+        )
+
+        # 6. Utilization
+        add_factor(
+            "Inventory Utilization Guard",
+            util_attr,
+            "Commercial duration slot utilization contribution of {pct:+.1f}% (₹{amt:,.0f})."
+        )
+
+        # Ensure at least one factor exists
+        if len(factors) == 1:
+            factors.append({
+                "factor": "Standard Dynamic Adjustment",
+                "impact_pct": 0.0,
+                "impact_amount": 0.0,
+                "description": "No significant local feature deviations from base conditions."
+            })
+
+        return factors
+
     @staticmethod
     def generate_price_factors(
         base_price: float,
@@ -11,125 +143,5 @@ class ExplainableAI:
         weather: Dict[str, Any],
         impact_analysis: Optional[Dict[str, Any]] = None,
     ) -> List[Dict[str, Any]]:
-        """
-        Phase 8 & 9: Explainable AI Price Factors and Deconstruction.
-        Deconstructs final price dynamically into component adjustments.
-        """
-        factors: List[Dict[str, Any]] = []
-        
-        # 1. Base Market Price
-        factors.append({
-            "factor": "Base Market Price",
-            "impact_pct": 0.0,
-            "impact_amount": float(round(base_price, -2)),
-            "description": "Standard median baseline price for this slot category learned from historical dataset."
-        })
-
-        # 2. Weekend Premium
-        is_weekend = features.get("is_weekend", 0)
-        weekend_ratio = features.get("weekend_premium_ratio", 1.25)
-        if is_weekend:
-            val = float(round(base_price * (weekend_ratio - 1.0), -2))
-            pct = round((weekend_ratio - 1.0) * 100.0, 1)
-            factors.append({
-                "factor": "Weekend Premium",
-                "impact_pct": pct,
-                "impact_amount": val,
-                "description": f"Weekend demand multiplier (+{pct}%) learned from Saturday/Sunday booking patterns."
-            })
-
-        # 3. Lead Time Adjustment
-        lead_days = features.get("lead_days", 7)
-        lead_ratio = features.get("advance_booking_ratio", 1.10)
-        if lead_days > 14:
-            val = float(round(base_price * (lead_ratio - 1.0), -2))
-            pct = round((lead_ratio - 1.0) * 100.0, 1)
-            factors.append({
-                "factor": "Lead Time Adjustment (Advance)",
-                "impact_pct": pct,
-                "impact_amount": val,
-                "description": f"Advance booking premium of +{pct}% for reserving {lead_days} days in advance."
-            })
-        elif lead_days < 2:
-            val = float(round(base_price * -0.10, -2))
-            factors.append({
-                "factor": "Lead Time Adjustment (Last Minute)",
-                "impact_pct": -10.0,
-                "impact_amount": val,
-                "description": f"Discount of -10% applied for last-minute booking ({lead_days} days lead)."
-            })
-
-        # 4. Guest Count / Couple Adjustment
-        person_count = features.get("person_count", 4)
-        if features.get("is_couple", 0):
-            val = float(round(base_price * -0.15, -2))
-            factors.append({
-                "factor": "Guest Count Adjustment (Couple)",
-                "impact_pct": -15.0,
-                "impact_amount": val,
-                "description": "Discount of -15% for Couple Slot occupancy (reduced resource & utility usage)."
-            })
-        elif features.get("is_corporate", 0):
-            val = float(round(base_price * 0.20, -2))
-            factors.append({
-                "factor": "Guest Count Adjustment (Corporate/Large Group)",
-                "impact_pct": 20.0,
-                "impact_amount": val,
-                "description": f"Premium of +20% for large group occupancy of {person_count} guests."
-            })
-
-        # 5. Demand Regime & Seasonal Adjustment
-        season = features.get("season", "Winter")
-        summer_ratio = features.get("summer_demand_ratio", 1.20)
-        
-        if features.get("is_peak_season", 0):
-            pct = round((summer_ratio - 1.0) * 100.0, 1) if season == "Summer" else 10.0
-            val = float(round(base_price * (pct / 100.0), -2))
-            factors.append({
-                "factor": f"Demand Regime Adjustment (Peak {season})",
-                "impact_pct": pct,
-                "impact_amount": val,
-                "description": f"Seasonal high-demand adjustment of +{pct}% during peak booking period."
-            })
-        elif features.get("is_off_season", 0):
-            factors.append({
-                "factor": f"Demand Regime Adjustment (Off-Peak {season})",
-                "impact_pct": -12.0,
-                "impact_amount": float(round(base_price * -0.12, -2)),
-                "description": f"Off-peak demand discount of -12.0% based on historical monthly low booking activity."
-            })
-
-        # 6. Weather Adjustment
-        rain_prob = weather.get("rain_probability", 0.0)
-        condition = weather.get("condition", "Clear Sky")
-        temp = weather.get("temperature", 26.0)
-        rain_ratio = features.get("rain_impact_ratio", 0.85)
-        
-        if rain_prob > 50.0:
-            pct = round((rain_ratio - 1.0) * 100.0, 1)
-            val = float(round(base_price * (pct / 100.0), -2))
-            factors.append({
-                "factor": f"Weather Adjustment (Rain Impact: {condition})",
-                "impact_pct": pct,
-                "impact_amount": val,
-                "description": f"Weather risk reduction of {pct}% based on forecasted {rain_prob}% rain probability."
-            })
-        elif condition in ["Pleasant / Clear", "Sunny / Warm"] or (22.0 <= temp <= 28.0):
-            factors.append({
-                "factor": "Weather Adjustment (Pleasant Conditions)",
-                "impact_pct": 5.0,
-                "impact_amount": float(round(base_price * 0.05, -2)),
-                "description": f"Weather premium of +5.0% for pleasant temperature ({temp}°C) and clear skies."
-            })
-
-        # 7. Festival / Holiday Adjustment
-        if features.get("is_festival", 0) or features.get("is_festival_eve", 0):
-            fest_name = features.get("festival_name", "Holiday")
-            factors.append({
-                "factor": f"Festival Premium ({fest_name})",
-                "impact_pct": 25.0,
-                "impact_amount": float(round(base_price * 0.25, -2)),
-                "description": f"Festival markup (+25.0%) for booking date falling on or near holiday: {fest_name}."
-            })
-
-        return factors
+        """Deprecated: use calculate_perturbation_attributions for true data-driven attributions."""
+        return []

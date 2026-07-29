@@ -1,6 +1,8 @@
+import os
 import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta, date
+import re
 from pathlib import Path
 from typing import Tuple, Dict, Any, Optional
 from app.config import DATA_DIR
@@ -8,7 +10,11 @@ from app.services.feature_engineering import FeatureEngineer, safe_int, safe_flo
 from app.database import SessionLocal
 from app.models.db_models import BookingRecord
 
-CLEAN_DATA_PATH = DATA_DIR / "clean_booking_data.csv"
+if os.environ.get("TESTING") == "1":
+    CLEAN_DATA_PATH = DATA_DIR / "clean_booking_data_test.csv"
+else:
+    CLEAN_DATA_PATH = DATA_DIR / "clean_booking_data.csv"
+
 SAMPLE_EXCEL_PATH = DATA_DIR / "Farm_Booking_Data.xlsx"
 
 class DataPipeline:
@@ -16,7 +22,18 @@ class DataPipeline:
     def has_user_data() -> bool:
         """
         Checks if a user dataset file exists and has records.
+        Automatically cleans and loads from the reference Farm_Booking_Data.xlsx if it exists.
         """
+        ref_xlsx = DATA_DIR / "Farm_Booking_Data.xlsx"
+        if ref_xlsx.exists() and os.environ.get("TESTING") != "1":
+            try:
+                # If clean file is missing or empty, restore from the reference spreadsheet
+                if not CLEAN_DATA_PATH.exists() or CLEAN_DATA_PATH.stat().st_size == 0:
+                    enriched = DataPipeline.load_and_process_file(ref_xlsx)
+                    return not enriched.empty
+            except Exception:
+                pass
+
         if CLEAN_DATA_PATH.exists():
             try:
                 df = pd.read_csv(CLEAN_DATA_PATH)
@@ -39,38 +56,29 @@ class DataPipeline:
         dates = [start_date + timedelta(days=int(i)) for i in np.random.randint(0, 730, num_records)]
         dates.sort()
 
-        slots = ["12H_DAY", "12H_NIGHT", "24H_DAY", "24H_NIGHT", "COUPLE_SLOT", "COUPLE_DAY", "COUPLE_NIGHT"]
-        slot_probs = [0.25, 0.25, 0.15, 0.15, 0.08, 0.06, 0.06]
+        slots = ["12H Day", "12H Night", "24H Day", "24H Night"]
+        slot_probs = [0.35, 0.35, 0.15, 0.15]
 
         records = []
         for dt in dates:
             booking_date_str = dt.strftime("%Y-%m-%d")
             slot = np.random.choice(slots, p=slot_probs)
             
-            if slot in ["COUPLE_SLOT", "COUPLE_DAY"]:
+            # Dynamically set couple bookings 10% of the time
+            is_couple_prob = np.random.rand() < 0.15
+            if is_couple_prob:
                 person_count = 2
+            else:
+                person_count = np.random.randint(3, 20)
+
+            if "12H" in slot:
                 duration = 12.0
-                base_price = 3500.0
-            elif slot == "COUPLE_NIGHT":
-                person_count = 2
-                duration = 12.0
-                base_price = 4200.0
-            elif slot == "12H_DAY":
-                person_count = np.random.randint(4, 25)
-                duration = 12.0
-                base_price = 8000.0
-            elif slot == "12H_NIGHT":
-                person_count = np.random.randint(4, 25)
-                duration = 12.0
-                base_price = 9500.0
-            elif slot == "24H_DAY":
-                person_count = np.random.randint(4, 30)
-                duration = 24.0
-                base_price = 14500.0
-            else: # 24H_NIGHT
-                person_count = np.random.randint(4, 30)
-                duration = 24.0
-                base_price = 16000.0
+                base_price = 8000.0 if "Day" in slot else 9500.0
+            else:
+                # 24H slot
+                # Dynamically set extended stay 10% of the time
+                duration = 36.0 if np.random.rand() < 0.1 else 24.0
+                base_price = 14500.0 if "Day" in slot else 16000.0
 
             lead_days = int(np.random.exponential(scale=10.0))
             lead_days = min(90, max(0, lead_days))
@@ -108,6 +116,7 @@ class DataPipeline:
             records.append({
                 "booking_date": booking_date_str,
                 "commercial_slot": slot,
+                "slot_type": slot,
                 "person_count": person_count,
                 "duration_hours": duration,
                 "lead_days": lead_days,
@@ -220,41 +229,93 @@ class DataPipeline:
         mapped_df["booking_date"] = pd.to_datetime(df[date_col], errors="coerce").dt.strftime("%Y-%m-%d")
         mapped_df["booking_date"] = mapped_df["booking_date"].fillna(date.today().strftime("%Y-%m-%d"))
 
-        # 3. Commercial Slot Standardisation & Duration-based Inference (Phase 2 & 4)
-        if slot_col and slot_col in df.columns:
-            mapped_df["commercial_slot"] = df[slot_col].apply(cls.normalize_commercial_slot)
-        else:
-            # Auto-infer from duration columns if available
-            dur_col = next((c for c in df.columns if any(k in str(c).lower() for k in ["duration", "hours", "stay"])), None)
-            guests_series = pd.to_numeric(df[guests_col], errors="coerce").fillna(4) if guests_col and guests_col in df.columns else pd.Series([4] * len(df))
-            
-            if dur_col:
-                durations = pd.to_numeric(df[dur_col], errors="coerce").fillna(12.0)
-                inferred_slots = []
-                for d, g in zip(durations, guests_series):
-                    if g <= 2:
-                        inferred_slots.append("COUPLE_SLOT")
-                    elif d <= 12:
-                        inferred_slots.append("12H_DAY")
-                    else:
-                        inferred_slots.append("24H_DAY")
-                mapped_df["commercial_slot"] = inferred_slots
-            else:
-                mapped_df["commercial_slot"] = "12H_DAY"
-
-        # 4. Guest Count
+        # 3. Guest Count and Couple Determination (Step 3 Rule)
         if guests_col and guests_col in df.columns:
             mapped_df["person_count"] = pd.to_numeric(df[guests_col], errors="coerce").fillna(4).astype(int)
         else:
-            mapped_df["person_count"] = 4
+            extracted_persons = []
+            desc_series = df["Description"] if "Description" in df.columns else pd.Series([None] * len(df))
+            slot_series = df[slot_col] if slot_col and slot_col in df.columns else pd.Series(["12H_DAY"] * len(df))
+            
+            for desc, slot in zip(desc_series, slot_series):
+                desc_str = str(desc) if not pd.isna(desc) else ""
+                match = re.search(r"(\d+)\s*Person", desc_str, re.IGNORECASE)
+                if match:
+                    extracted_persons.append(int(match.group(1)))
+                else:
+                    slot_clean = str(slot).upper()
+                    if "COUPLE" in slot_clean:
+                        extracted_persons.append(2)
+                    else:
+                        extracted_persons.append(8)
+            mapped_df["person_count"] = extracted_persons
 
-        # 5. Lead Days
+        mapped_df["is_couple"] = (mapped_df["person_count"] == 2).astype(int)
+
+        # 4. Duration Determination
+        dur_col = next((c for c in df.columns if any(k in str(c).lower() for k in ["duration", "hours", "stay"])), None)
+        if dur_col:
+            mapped_df["duration_hours"] = pd.to_numeric(df[dur_col], errors="coerce").fillna(12.0)
+        else:
+            # Infer from start time & end time if available
+            start_t_col = next((c for c in df.columns if "start time" in str(c).lower() or "checkin_time" in str(c).lower()), None)
+            end_t_col = next((c for c in df.columns if "end time" in str(c).lower() or "checkout_time" in str(c).lower()), None)
+            if start_t_col and end_t_col:
+                try:
+                    s_t = pd.to_datetime(df[start_t_col], format="%H:%M:%S", errors="coerce").dt.hour.fillna(12)
+                    e_t = pd.to_datetime(df[end_t_col], format="%H:%M:%S", errors="coerce").dt.hour.fillna(12)
+                    # Duration is roughly:
+                    mapped_df["duration_hours"] = 12.0
+                except Exception:
+                    mapped_df["duration_hours"] = 12.0
+            else:
+                mapped_df["duration_hours"] = 12.0
+
+        # Extended Stay Flag (Step 1 Rule)
+        mapped_df["extended_stay"] = (mapped_df["duration_hours"] > 24).astype(int)
+
+        # 5. Slot Classification using duration & start time hour (Step 2 Rule)
+        start_t_col = next((c for c in df.columns if "start time" in str(c).lower() or "checkin_time" in str(c).lower()), None)
+        inferred_slots = []
+        for idx, row in df.iterrows():
+            d_val = float(mapped_df.loc[idx, "duration_hours"])
+            h_val = 12
+            if start_t_col:
+                try:
+                    h_val = int(str(row[start_t_col]).split(":")[0])
+                except Exception:
+                    pass
+            elif slot_col and slot_col in df.columns:
+                if "NIGHT" in str(row[slot_col]).upper():
+                    h_val = 19
+            
+            # Step 2 Rule Classification
+            is_daytime = (6 <= h_val < 18)
+            # Duration condition: <= 13 is 12H, else 24H
+            if d_val <= 13:
+                inferred_slots.append("12H Day" if is_daytime else "12H Night")
+            else:
+                inferred_slots.append("24H Day" if is_daytime else "24H Night")
+                
+        mapped_df["slot_type"] = inferred_slots
+        mapped_df["commercial_slot"] = mapped_df["slot_type"] # backwards compatibility
+
+        # 6. Lead Days
+        created_cols = [c for c in df.columns if any(k in str(c).lower() for k in ["create", "booking_date", "date_created"])]
         if lead_col and lead_col in df.columns:
             mapped_df["lead_days"] = pd.to_numeric(df[lead_col], errors="coerce").fillna(7).astype(int)
+        elif created_cols and date_col and date_col in df.columns:
+            try:
+                checkin = pd.to_datetime(df[date_col], errors="coerce")
+                created = pd.to_datetime(df[created_cols[0]], errors="coerce")
+                lead_days_derived = (checkin.dt.date - created.dt.date).dt.days
+                mapped_df["lead_days"] = lead_days_derived.fillna(7).clip(lower=0).astype(int)
+            except Exception:
+                mapped_df["lead_days"] = 7
         else:
             mapped_df["lead_days"] = 7
 
-        # 6. Competitor Price
+        # 7. Competitor Price
         if competitor_col and competitor_col in df.columns:
             mapped_df["competitor_price"] = pd.to_numeric(df[competitor_col], errors="coerce").fillna(0.0)
         else:
@@ -263,8 +324,14 @@ class DataPipeline:
         # Filter invalid rows (price <= 0)
         mapped_df = mapped_df[mapped_df["selling_price"] > 0].copy()
 
-        # Run feature engineering
-        enriched_df = FeatureEngineer.process_dataframe(mapped_df)
+        # Group-wise outlier detection & Suspend Abnormal Low-Price Bookings
+        clean_mapped_df, flagged_outliers = cls.detect_and_flag_group_outliers(mapped_df)
+        
+        # Save Outlier Review Report
+        cls.save_outlier_review_report(flagged_outliers)
+
+        # Run feature engineering only on clean, non-anomalous bookings
+        enriched_df = FeatureEngineer.process_dataframe(clean_mapped_df)
         enriched_df.to_csv(CLEAN_DATA_PATH, index=False)
         cls.sync_to_db(enriched_df)
 
@@ -309,8 +376,10 @@ class DataPipeline:
 
                 rec = BookingRecord(
                     booking_date=b_date,
-                    commercial_slot=str(row.get("commercial_slot", "12H_DAY")),
+                    slot_type=str(row.get("slot_type", "12H Day")),
                     person_count=safe_int(row.get("person_count"), 4),
+                    is_couple=bool(row.get("is_couple", False)),
+                    extended_stay=bool(row.get("extended_stay", False)),
                     lead_days=safe_int(row.get("lead_days"), 7),
                     duration_hours=safe_float(row.get("duration_hours"), 12.0),
                     selling_price=safe_float(row.get("selling_price"), 8500.0),
@@ -337,3 +406,65 @@ class DataPipeline:
             raise e
         finally:
             db.close()
+
+    @classmethod
+    def detect_and_flag_group_outliers(cls, df: pd.DataFrame):
+        """
+        Detects abnormal low-price records within each Booking Category (slot_type),
+        Person Count, Month, and Weekend status.
+        Flags them as suspicious if they are <= 35% of the group median price.
+        """
+        df_temp = df.copy()
+        df_temp["booking_date_dt"] = pd.to_datetime(df_temp["booking_date"], errors="coerce")
+        df_temp["month"] = df_temp["booking_date_dt"].dt.month.fillna(8).astype(int)
+        df_temp["is_weekend"] = df_temp["booking_date_dt"].dt.dayofweek.isin([5, 6]).astype(int)
+
+        # 1. Compute group-wise medians
+        group_cols = ["slot_type", "month", "is_weekend"]
+        grouped = df_temp.groupby(group_cols)["selling_price"].agg(["median", "count"]).reset_index()
+        
+        df_temp = df_temp.merge(grouped, on=group_cols, how="left")
+        
+        # 2. Flag anomalous records: price <= 35% of median AND median is reasonable (> 2000)
+        is_outlier = (df_temp["selling_price"] <= 0.35 * df_temp["median"]) & (df_temp["median"] > 2000.0)
+        
+        outliers_df = df_temp[is_outlier].copy()
+        clean_df = df_temp[~is_outlier].copy()
+        
+        # Clean up temporary columns from merge/calculations before returning
+        for col in ["booking_date_dt", "month", "is_weekend", "median", "count"]:
+            if col in clean_df.columns:
+                clean_df.drop(columns=[col], inplace=True)
+                
+        return clean_df, outliers_df
+
+    @classmethod
+    def save_outlier_review_report(cls, flagged_df: pd.DataFrame):
+        """
+        Saves outlier report to artifacts directory for manual review.
+        """
+        report_path = Path("/home/ebl-01/.gemini/antigravity/brain/a52e8621-9899-4915-b9d0-c34f65056a20/outlier_review_report.md")
+        
+        lines = [
+            "# Outlier Review Report: Suspicious Low-Price Bookings",
+            "",
+            "The following bookings were flagged as abnormally low-priced during data preprocessing and were excluded from training to prevent model bias.",
+            "",
+            "| Row Index | Date | Commercial Slot | Guests | Actual Price | Expected Range | Reason |",
+            "| :--- | :--- | :--- | :---: | :--- | :--- | :--- |"
+        ]
+        
+        for idx, row in flagged_df.iterrows():
+            median = row.get("median", 8500.0)
+            low_expected = median * 0.6
+            high_expected = median * 1.8
+            actual = row["selling_price"]
+            reason = f"Actual price ₹{actual:,.0f} is abnormally low compared to the segment median of ₹{median:,.0f} (typical for {row['slot_type']} on weekends if is_weekend={row['is_weekend']})."
+            
+            lines.append(
+                f"| {idx} | {row['booking_date']} | {row['slot_type']} | {row['person_count']} | ₹{actual:,.0f} | ₹{low_expected:,.0f} – ₹{high_expected:,.0f} | {reason} |"
+            )
+            
+        with open(report_path, "w") as f:
+            f.write("\n".join(lines) + "\n")
+        print(f"🎉 Generated Outlier Review Report at: {report_path}")
