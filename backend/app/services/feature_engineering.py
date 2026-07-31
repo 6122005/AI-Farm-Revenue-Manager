@@ -44,11 +44,12 @@ def load_festivals_dict() -> Tuple[Dict[str, str], Dict[str, float], List[str]]:
             print(f"⚠️ Error loading festivals.csv: {e}")
 
     fallback_names = {
-        "01-01": "New Year Day", "01-26": "Republic Day", "03-25": "Holi",
+        "01-01": "New Year Day", "01-14": "Makar Sankranti", "01-15": "Makar Sankranti", "01-26": "Republic Day", "03-25": "Holi",
         "08-15": "Independence Day", "09-07": "Ganesh Chaturthi", "10-02": "Gandhi Jayanti",
         "10-12": "Dussehra", "11-01": "Diwali", "11-02": "Diwali Balipratipada",
         "12-25": "Christmas", "12-31": "New Year Eve"
     }
+
     fallback_eves = ["12-30", "12-31", "10-31", "10-11", "08-14", "12-24"]
     return fallback_names, {}, fallback_eves
 
@@ -345,19 +346,37 @@ class FeatureEngineer:
             df["year"] = pd.to_numeric(df["year"], errors="coerce").fillna(2026).astype(int)
             df["is_weekend"] = pd.to_numeric(df["is_weekend"], errors="coerce").fillna(0).astype(int)
             df["person_count"] = pd.to_numeric(df["person_count"], errors="coerce").fillna(4).astype(int)
-            df["selling_price"] = pd.to_numeric(df["selling_price"], errors="coerce").fillna(8500.0).astype(float)
-
+            # Normalize selling price based on domain duration rules (6-12h anchored to 12H, 13-25h anchored to 24H)
+            df["duration_hours"] = pd.to_numeric(df.get("duration_hours", 24.0), errors="coerce").fillna(24.0)
             
-            # 1. slot_month_weekend_avg & independent segment statistics
-            gp1 = df.groupby(["commercial_slot", "month", "is_weekend"])["selling_price"].mean().reset_index()
+            def calc_norm_price(row_p, row_d):
+                p = float(row_p)
+                d = float(row_d)
+                if 6 <= d <= 12:
+                    return p  # 12-hour base equivalent (hourly = p / 12.0)
+                elif 13 <= d <= 25:
+                    return p  # 24-hour base equivalent (hourly = p / 24.0)
+                else:
+                    daily_factor = max(1.0, d / 24.0)
+                    return p / daily_factor
+
+            df["norm_selling_price"] = df.apply(lambda r: calc_norm_price(r["selling_price"], r["duration_hours"]), axis=1)
+            df["extra_guests"] = df["person_count"].apply(lambda p: max(0, int(p) - 4))
+            df["base_selling_price"] = df["norm_selling_price"] - df["extra_guests"] * 50.0
+
+
+
+            # 1. slot_month_weekend_avg & independent segment statistics (using base_selling_price)
+            gp1 = df.groupby(["commercial_slot", "month", "is_weekend"])["base_selling_price"].mean().reset_index()
             for _, row in gp1.iterrows():
                 key = f"slot_month_weekend_{row['commercial_slot']}_{int(row['month'])}_{int(row['is_weekend'])}"
-                avg_dict[key] = float(row["selling_price"])
-                
-            # Month & Slot Specific Weekend Premium Ratios (100% Independent per Slot and Month)
-            gp_wk = df[df["is_weekend"] == 1].groupby(["commercial_slot", "month"])["selling_price"].mean().reset_index()
-            gp_wd = df[df["is_weekend"] == 0].groupby(["commercial_slot", "month"])["selling_price"].mean().reset_index()
-            wd_map = {(row['commercial_slot'], int(row['month'])): float(row['selling_price']) for _, row in gp_wd.iterrows()}
+                avg_dict[key] = float(row["base_selling_price"])
+            
+            # Month & Slot Specific Weekend Premium Ratios
+            gp_wk = df[df["is_weekend"] == 1].groupby(["commercial_slot", "month"])["base_selling_price"].mean().reset_index()
+            gp_wd = df[df["is_weekend"] == 0].groupby(["commercial_slot", "month"])["base_selling_price"].mean().reset_index()
+            wd_map = {(row['commercial_slot'], int(row['month'])): float(row['base_selling_price']) for _, row in gp_wd.iterrows()}
+
             
             for _, row in gp_wk.iterrows():
                 slot_code = str(row['commercial_slot'])
@@ -378,7 +397,7 @@ class FeatureEngineer:
 
 
             # Independent Segment Statistics (mean, median, std, count, confidence, p25, p75)
-            gp_stats = df.groupby(["commercial_slot", "month", "is_weekend"])["selling_price"].agg(
+            gp_stats = df.groupby(["commercial_slot", "month", "is_weekend"])["base_selling_price"].agg(
                 mean="mean",
                 median="median",
                 std="std",
@@ -407,7 +426,8 @@ class FeatureEngineer:
             # Trimmed Mean & Weighted Median for outlier resistance
             for (slot_c, m_c, w_c), grp in df.groupby(["commercial_slot", "month", "is_weekend"]):
                 slot_norm = slot_engine.normalize_commercial_slot(slot_c)
-                prices = grp["selling_price"].sort_values().values
+                prices = grp["base_selling_price"].sort_values().values
+
                 n_p = len(prices)
                 if n_p >= 5:
                     cut = int(np.floor(n_p * 0.10))
@@ -787,7 +807,8 @@ class FeatureEngineer:
         is_lead_31_60d = 1 if 31 <= lead_days <= 60 else 0
         is_lead_60d_plus = 1 if lead_days > 60 else 0
 
-        lead_time_demand_curve = float(np.round(np.exp(-0.02 * lead_days), 4))
+        lead_time_demand_curve = 1.0
+
 
         # Occupancy Features (fallbacks)
         current_occupancy_pct = safe_float(row.get("current_occupancy_pct"), 0.35)

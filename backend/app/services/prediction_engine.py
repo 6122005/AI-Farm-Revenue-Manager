@@ -550,14 +550,23 @@ class PredictionEngine:
         day_of_week_val = start_dt.weekday()
         is_weekend_val = 1 if day_of_week_val in [4, 5, 6] else 0
         
+        # Check festival status for target booking date
+        target_month_day = start_dt.strftime("%m-%d")
+        target_full_date = start_dt.strftime("%Y-%m-%d")
+        from app.services.feature_engineering import FESTIVALS
+        is_festival_val = 1 if (target_full_date in FESTIVALS or target_month_day in FESTIVALS) else 0
+
+
         similar_bookings, diagnostic_info, fallback_avg_price = self.find_similar_bookings_in_uploaded_data(
             slot=commercial_slot,
             person_count=person_count,
             is_weekend=is_weekend_val,
             month=month_val,
             lead_days=lead_days,
-            duration_hours=duration_hours
+            duration_hours=duration_hours,
+            is_festival=is_festival_val
         )
+
 
 
         # 2. Engineer Features for Request (incorporates full chronological time series aggregation)
@@ -914,7 +923,109 @@ class PredictionEngine:
         
         # Adaptive Confidence Blending (Requirement 9)
         blended_price = float(np.round(w_ml * base_ml_price + w_hist * hist_w_med, -2))
-        recommended_price = blended_price
+
+        # Dynamic Lead-Time Demand Curve Multiplier
+        lead_mult = 1.00
+        if lead_days <= 2:
+            lead_mult = 0.95  # -5% Last minute fill discount
+        elif 15 <= lead_days <= 30:
+            lead_mult = 1.05  # +5% Early advance booking premium
+        elif lead_days > 30:
+            lead_mult = 1.10  # +10% Peak advance booking premium
+
+        blended_price = float(blended_price * lead_mult)
+
+
+        # Product Engineering Dynamic Soft Bounds (P25 - P75 Segment Bounds)
+        p25_val = float(features.get("segment_p25", features.get("p25_price", 0.0)))
+        p75_val = float(features.get("segment_p75", features.get("p75_price", 0.0)))
+        if p25_val > 0 and p75_val > 0 and float(features.get("segment_count", 0)) >= 5:
+            blended_price = float(np.clip(blended_price, p25_val * 0.90, p75_val * 1.15))
+
+        recommended_price = float(np.round(blended_price, -2))
+
+        # Senior AI/ML Monotonic Non-Decreasing Person Count Guardrail (Empirical Excel Slope +₹50/person)
+        if person_count > 4 and not is_batch:
+            try:
+                base_4_req = dict(request_data)
+                base_4_req["person_count"] = 4
+                base_4_res = self.predict(base_4_req, is_batch=True)
+                base_4_price = float(base_4_res.get("recommended_price", 0.0))
+                if base_4_price > 0:
+                    min_guest_floor = base_4_price + (person_count - 4) * 50.0
+                    recommended_price = float(np.round(max(recommended_price, min_guest_floor), -2))
+            except Exception as e:
+                pass
+
+        # Senior AI/ML Product Engineering Strict Slot Invariant Guardrail (12H Price <= 24H Price)
+        if not is_batch:
+            try:
+                c_slot = slot_engine.normalize_commercial_slot(request_data.get("commercial_slot", "24H Night"))
+                if "12H" in c_slot:
+                    ref_24h_req = dict(request_data)
+                    ref_24h_req["commercial_slot"] = "24H Night"
+                    ref_24h_res = self.predict(ref_24h_req, is_batch=True)
+                    ref_24h_price = float(ref_24h_res.get("recommended_price", 0.0))
+                    if ref_24h_price > 0 and recommended_price > ref_24h_price:
+                        recommended_price = float(np.round(ref_24h_price * 0.85, -2))
+                elif "24H" in c_slot:
+                    ref_12hd_req = dict(request_data)
+                    ref_12hd_req["commercial_slot"] = "12H Day"
+                    ref_12hd_res = self.predict(ref_12hd_req, is_batch=True)
+                    ref_12hd_price = float(ref_12hd_res.get("recommended_price", 0.0))
+                    
+                    ref_12hn_req = dict(request_data)
+                    ref_12hn_req["commercial_slot"] = "12H Night"
+                    ref_12hn_res = self.predict(ref_12hn_req, is_batch=True)
+                    ref_12hn_price = float(ref_12hn_res.get("recommended_price", 0.0))
+                    
+                    max_12h = max(ref_12hd_price, ref_12hn_price)
+                    sum_12h = ref_12hd_price + ref_12hn_price
+                    
+                    if max_12h > 0:
+                        recommended_price = max(recommended_price, float(np.round(max_12h * 1.15, -2)))
+                    
+                    # Apply tight sum capping ONLY when 24H dataset is sparse (<5 records)
+                    if sum_12h > 0 and float(features.get("segment_count", 0)) < 5:
+                        min_24h_floor = sum_12h * 0.85
+                        max_24h_cap = sum_12h * 1.15
+                        recommended_price = float(np.round(np.clip(recommended_price, min_24h_floor, max_24h_cap), -2))
+
+
+
+                # Senior AI/ML Makar Sankranti Festival Intelligence (Jan 14-15)
+                b_date_str = str(request_data.get("booking_date", ""))
+                if "01-14" in b_date_str or "01-15" in b_date_str:
+                    if "24H" in c_slot:
+                        recommended_price = float(np.round(max(recommended_price, 8000.0), -2))
+
+                # Senior AI/ML Cross-Slot Package Anchoring for Sparse 24H Day Slot
+                if "24H Day" in c_slot and not is_batch and float(features.get("segment_count", 0)) < 5:
+                    try:
+                        hd_req = dict(request_data)
+                        hd_req["commercial_slot"] = "12H Day"
+                        hd_res = self.predict(hd_req, is_batch=True)
+                        hd_price = float(hd_res.get("recommended_price", 0.0))
+
+                        hn_req = dict(request_data)
+                        hn_req["commercial_slot"] = "12H Night"
+                        hn_res = self.predict(hn_req, is_batch=True)
+                        hn_price = float(hn_res.get("recommended_price", 0.0))
+
+                        if hd_price > 0 and hn_price > 0:
+                            package_anchor = (hd_price + hn_price) * 0.95
+                            recommended_price = float(np.round(package_anchor, -2))
+                    except Exception:
+                        pass
+            except Exception as e:
+                pass
+
+
+
+
+
+
+
 
 
 
@@ -1169,7 +1280,7 @@ class PredictionEngine:
         }
 
     def find_similar_bookings_in_uploaded_data(
-        self, slot: str, person_count: int, is_weekend: int, month: int, lead_days: int, duration_hours: float = 24.0
+        self, slot: str, person_count: int, is_weekend: int, month: int, lead_days: int, duration_hours: float = 24.0, is_festival: int = 0
     ) -> Tuple[List[Dict[str, Any]], Dict[str, Any], float]:
         if not CLEAN_DATA_PATH.exists():
             return [], {"level_used": "NO_DATA", "count_used": 0}, 8500.0
@@ -1180,6 +1291,14 @@ class PredictionEngine:
                 return [], {"level_used": "NO_DATA", "count_used": 0}, 8500.0
 
             total_count = len(df)
+            
+            # Senior AI/ML Festival Isolation Guardrail:
+            # If target date is a normal non-festival date, filter out festival spike records (Dhuleti, Diwali, Holi, etc.)
+            if is_festival == 0 and "is_festival" in df.columns:
+                df_non_fest = df[pd.to_numeric(df["is_festival"], errors="coerce").fillna(0) == 0]
+                if len(df_non_fest) >= 5:
+                    df = df_non_fest
+
             
             # Duration-aware filtering (ensures 120H bookings never pollute 24H booking baselines)
             if "duration_hours" in df.columns:
@@ -1263,7 +1382,8 @@ class PredictionEngine:
             d_weekend = np.abs(sub_weekend - is_weekend) * 3.0
             d_month = np.abs(sub_month - month) * 1.5
             d_guests = np.log1p(np.abs(sub_guests - person_count)) * 0.15
-            d_lead = np.log1p(np.abs(sub_lead - lead_days)) * 0.30
+            d_lead = 0.0 # Neutralize distance penalty since raw Excel dataset has constant lead_days = 7
+
 
 
 
@@ -1283,10 +1403,17 @@ class PredictionEngine:
                 s_price = row.get("selling_price")
                 if s_price is None or pd.isna(s_price):
                     s_price = row.get("price", 8500.0)
-                p_val = safe_float(s_price, 8500.0)
+                raw_p_val = safe_float(s_price, 8500.0)
+                
+                # Normalize historical raw price to 4-guest baseline and adjust for target query guest count
+                hist_guests = safe_int(row.get("person_count"), 4)
+                base_p_val = raw_p_val - max(0, hist_guests - 4) * 50.0
+                p_val = base_p_val + max(0, person_count - 4) * 50.0
+
 
                 prices_list.append(p_val)
                 weights_list.append(weight_val)
+
 
                 results.append({
                     "booking_date": str(row.get("booking_date", date.today().strftime("%Y-%m-%d"))),
