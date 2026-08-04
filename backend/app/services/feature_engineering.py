@@ -233,10 +233,12 @@ class BusinessInsightDiscoverer:
 class FeatureEngineer:
     _insights = None
     _group_averages_cache = None
+    _weekend_intelligence = None
 
     @classmethod
     def purge_cache(cls):
         cls._group_averages_cache = None
+        cls._weekend_intelligence = None
 
     @classmethod
     def get_group_averages(cls) -> Dict[str, Any]:
@@ -279,6 +281,62 @@ class FeatureEngineer:
             "average_occupancy": 0.65
         }
         return cls._insights
+
+    @classmethod
+    def _load_weekend_intelligence(cls) -> Dict[str, int]:
+        if cls._weekend_intelligence is not None:
+            return cls._weekend_intelligence
+            
+        wknd_path = DATA_DIR / "learned_weekend_intelligence.json"
+        if wknd_path.exists():
+            try:
+                import json
+                with open(wknd_path, "r") as f:
+                    cls._weekend_intelligence = json.load(f)
+                    return cls._weekend_intelligence
+            except Exception:
+                pass
+                
+        cls._weekend_intelligence = {}
+        return cls._weekend_intelligence
+
+    @classmethod
+    def discover_weekend_intelligence(cls, df: pd.DataFrame) -> Dict[str, Any]:
+        """
+        Learns from historical data which combinations of (day_of_week, commercial_slot)
+        are officially treated as weekends by the business.
+        """
+        try:
+            df = df.copy()
+            if "booking_date" in df.columns and "day_of_week" not in df.columns:
+                df["booking_date_dt"] = pd.to_datetime(df["booking_date"], errors="coerce")
+                df["day_of_week"] = df["booking_date_dt"].dt.weekday
+                
+            if "is_weekend" not in df.columns or "day_of_week" not in df.columns or "commercial_slot" not in df.columns:
+                return {}
+            
+            weekend_profile = {}
+            # Group by day_of_week and commercial_slot
+            grouped = df.groupby(["day_of_week", "commercial_slot"])["is_weekend"].mean().reset_index()
+            
+            for _, row in grouped.iterrows():
+                dow = int(row["day_of_week"])
+                slot = str(row["commercial_slot"])
+                # If it's historically marked as weekend > 50% of the time, treat it as weekend
+                is_wknd = 1 if float(row["is_weekend"]) > 0.5 else 0
+                
+                key = f"{dow}_{slot}"
+                weekend_profile[key] = is_wknd
+                
+            wknd_path = DATA_DIR / "learned_weekend_intelligence.json"
+            with open(wknd_path, "w") as f:
+                json.dump(weekend_profile, f, indent=2)
+                
+            print(f"🎉 [WEEKEND INTELLIGENCE] Discovered {sum(weekend_profile.values())} official weekend slots out of {len(weekend_profile)} combinations.")
+            return weekend_profile
+        except Exception as ex:
+            print(f"⚠️ Error discovering weekend intelligence: {ex}")
+            return {}
 
     @classmethod
     def compute_advanced_time_series_features(cls, df: pd.DataFrame) -> pd.DataFrame:
@@ -336,18 +394,45 @@ class FeatureEngineer:
     @classmethod
     def calculate_group_averages(cls, df: pd.DataFrame):
         cls.purge_cache()
+        cls.discover_weekend_intelligence(df)
         try:
             avg_dict = {}
             
             # Ensure month, year, is_weekend, selling_price, person_count are numeric and slot normalized
             df = df.copy()
+            
+            # Exclude only specific outlier festivals from average calculation
+            if "festival_name" in df.columns:
+                excluded_fests = ["makar sankranti", "holi", "dhuleti"]
+                df = df[~df["festival_name"].astype(str).str.lower().str.strip().isin(excluded_fests)]
+                
             df["commercial_slot"] = df["commercial_slot"].apply(lambda s: slot_engine.normalize_commercial_slot(s))
-            df["month"] = pd.to_numeric(df["month"], errors="coerce").fillna(6).astype(int)
-            df["year"] = pd.to_numeric(df["year"], errors="coerce").fillna(2026).astype(int)
-            df["is_weekend"] = pd.to_numeric(df["is_weekend"], errors="coerce").fillna(0).astype(int)
-            df["person_count"] = pd.to_numeric(df["person_count"], errors="coerce").fillna(4).astype(int)
+            if "booking_date" in df.columns:
+                dt_s = pd.to_datetime(df["booking_date"], errors="coerce")
+                df["month"] = dt_s.dt.month.fillna(6).astype(int)
+                df["year"] = dt_s.dt.year.fillna(2026).astype(int)
+                df["is_weekend"] = dt_s.dt.weekday.isin([4, 5, 6]).astype(int) # Include Friday as weekend for farmhouses
+            else:
+                if "month" not in df.columns: df["month"] = 6
+                else: df["month"] = pd.to_numeric(df["month"], errors="coerce").fillna(6).astype(int)
+                
+                if "year" not in df.columns: df["year"] = 2026
+                else: df["year"] = pd.to_numeric(df["year"], errors="coerce").fillna(2026).astype(int)
+                
+                if "is_weekend" not in df.columns: df["is_weekend"] = 0
+                else: df["is_weekend"] = pd.to_numeric(df["is_weekend"], errors="coerce").fillna(0).astype(int)
+
+            if "is_festival" not in df.columns: df["is_festival"] = 0
+            else: df["is_festival"] = pd.to_numeric(df["is_festival"], errors="coerce").fillna(0).astype(int)
+
+            if "festival_name" not in df.columns: df["festival_name"] = ""
+
+            if "person_count" not in df.columns: df["person_count"] = 4
+            else: df["person_count"] = pd.to_numeric(df["person_count"], errors="coerce").fillna(4).astype(int)
+            
             # Normalize selling price based on domain duration rules (6-12h anchored to 12H, 13-25h anchored to 24H)
-            df["duration_hours"] = pd.to_numeric(df.get("duration_hours", 24.0), errors="coerce").fillna(24.0)
+            if "duration_hours" not in df.columns: df["duration_hours"] = 24.0
+            else: df["duration_hours"] = pd.to_numeric(df["duration_hours"], errors="coerce").fillna(24.0)
             
             def calc_norm_price(row_p, row_d):
                 p = float(row_p)
@@ -361,8 +446,36 @@ class FeatureEngineer:
                     return p / daily_factor
 
             df["norm_selling_price"] = df.apply(lambda r: calc_norm_price(r["selling_price"], r["duration_hours"]), axis=1)
+            
+            # Dynamic Marginal Guest Cost Calculation (Covariance / Variance slope) with Regularization
+            def compute_slope(df_sub):
+                if len(df_sub) > 5 and df_sub["person_count"].nunique() > 1:
+                    # Use all records (including top 10% VIP prices) as requested
+                    df_clean = df_sub.copy()
+                    
+                    if len(df_clean) > 5 and df_clean["person_count"].nunique() > 1:
+                        cov = df_clean["norm_selling_price"].cov(df_clean["person_count"])
+                        var = df_clean["person_count"].var()
+                        if var > 0:
+                            raw_slope = float(cov / var)
+                            # Regularize slope: Floor at 30, Cap at 100 to prevent runaway pricing
+                            return min(100.0, max(30.0, raw_slope))
+                return 50.0  # Fallback if insufficient variance
+            
+            global_marginal_cost = compute_slope(df)
+            avg_dict["marginal_guest_cost_global"] = global_marginal_cost
+            
+            slot_cost_map = {}
+            for slot in df["commercial_slot"].unique():
+                slot_cost = compute_slope(df[df["commercial_slot"] == slot])
+                slot_norm = slot_engine.normalize_commercial_slot(slot)
+                avg_dict[f"marginal_guest_cost_{slot_norm}"] = slot_cost
+                slot_cost_map[slot] = slot_cost
+                
+            df["marginal_cost"] = df["commercial_slot"].map(slot_cost_map).fillna(global_marginal_cost)
+            
             df["extra_guests"] = df["person_count"].apply(lambda p: max(0, int(p) - 4))
-            df["base_selling_price"] = df["norm_selling_price"] - df["extra_guests"] * 50.0
+            df["base_selling_price"] = df["norm_selling_price"] - df["extra_guests"] * df["marginal_cost"]
 
 
 
@@ -382,7 +495,7 @@ class FeatureEngineer:
                 slot_code = str(row['commercial_slot'])
                 slot_norm = slot_engine.normalize_commercial_slot(slot_code)
                 m_code = int(row['month'])
-                wk_mean = float(row['selling_price'])
+                wk_mean = float(row['base_selling_price'])
                 wd_mean = wd_map.get((slot_code, m_code), 0.0)
                 
                 # Absolute rupee difference calculation (No percentage multiplication!)
@@ -428,13 +541,8 @@ class FeatureEngineer:
                 slot_norm = slot_engine.normalize_commercial_slot(slot_c)
                 prices = grp["base_selling_price"].sort_values().values
 
-                n_p = len(prices)
-                if n_p >= 5:
-                    cut = int(np.floor(n_p * 0.10))
-                    trimmed_prices = prices[cut : n_p - cut] if cut > 0 else prices
-                    t_mean = float(np.mean(trimmed_prices))
-                else:
-                    t_mean = float(np.mean(prices))
+                # Use standard mean instead of trimmed mean to include all top 10% data
+                t_mean = float(np.mean(prices))
                     
                 w_med = float(np.median(prices))
                 for s_key in set([str(slot_c), slot_norm]):
@@ -559,7 +667,23 @@ class FeatureEngineer:
         month_cos = math.cos(month_rad)
         year = int(dt.year)
         day_of_week = int(dt.weekday()) # 0 = Monday, 6 = Sunday
-        is_weekend = 1 if day_of_week in [5, 6] else 0
+        
+        # New Commercial Weekend Rule (Dynamic Intelligence)
+        commercial_slot = row.get("commercial_slot", str(row.get("slot_type", "")))
+        commercial_slot = slot_engine.normalize_commercial_slot(commercial_slot).strip().title()
+        
+        # 1. Trust explicit 'is_weekend' if provided in the row (e.g. historical data processing)
+        if "is_weekend" in row and pd.notna(row["is_weekend"]):
+            is_weekend = int(float(row["is_weekend"]))
+        else:
+            # 2. Use learned weekend intelligence if not provided (e.g. future predictions)
+            wknd_intel = cls._load_weekend_intelligence()
+            key = f"{day_of_week}_{commercial_slot}"
+            if key in wknd_intel:
+                is_weekend = wknd_intel[key]
+            else:
+                # 3. Fallback logic if combination is completely unseen
+                is_weekend = 1 if day_of_week in [5, 6] else 0
 
         full_date_str = dt.strftime("%Y-%m-%d")
         month_day = dt.strftime("%m-%d")

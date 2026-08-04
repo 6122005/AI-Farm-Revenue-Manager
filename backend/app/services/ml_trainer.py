@@ -43,7 +43,7 @@ BINARY_COLS = [
     "is_same_day", "is_lead_1_3d", "is_lead_4_7d", "is_lead_8_14d", "is_lead_15_30d", "is_lead_31_60d", "is_lead_60d_plus"
 ]
 NUMERICAL_COLS = [
-    "person_count", "lead_days", "duration_hours", "commercial_units", "hours_over_24", "effective_daily_rate", "extended_discount_ratio", "slot_capacity_hours", 
+    "quarter", "person_count", "lead_days", "duration_hours", "commercial_units", "hours_over_24", "effective_daily_rate", "extended_discount_ratio", "slot_capacity_hours", 
     "slot_utilization_ratio", "opportunity_cost_factor", "temperature", 
     "rain_probability", "humidity", "wind_speed", "cloud_cover", 
     "demand_score", "business_confidence_score", "slot_month_weekend_avg", 
@@ -128,7 +128,11 @@ class MLTrainer:
 
         file_path = Path(target_entry["artifact_path"])
         if not file_path.exists():
-            raise FileNotFoundError(f"Version artifact file not found at {file_path}")
+            file_path = MODELS_DIR / "version_history" / file_path.name
+        if not file_path.exists():
+            file_path = MODELS_DIR / file_path.name
+        if not file_path.exists():
+            raise FileNotFoundError(f"Version artifact file not found at {target_entry['artifact_path']}")
 
         artifact = joblib.load(file_path)
         joblib.dump(artifact, CHAMPION_MODEL_PATH)
@@ -198,23 +202,8 @@ class MLTrainer:
             df_sorted.drop(columns=["booking_date_dt"], inplace=True)
 
         # 1b. DETECT AND REMOVE OUTLIERS AUTOMATICALLY (Phase 7)
+        # Outlier and extended stay dropping logic has been removed as per user request to include all records
         df_filtered = df_sorted.copy()
-        valid_indices = []
-        if "slot_type" in df_filtered.columns:
-            for slot in df_filtered["slot_type"].unique():
-                slot_df = df_filtered[df_filtered["slot_type"] == slot]
-                prices = pd.to_numeric(slot_df["selling_price"], errors="coerce").fillna(8500.0)
-                if len(slot_df) > 5:
-                    mean_p = prices.mean()
-                    std_p = prices.std()
-                    if std_p > 0:
-                        keep_df = slot_df[(prices >= mean_p - 3.0 * std_p) & (prices <= mean_p + 3.0 * std_p)]
-                        valid_indices.extend(keep_df.index.tolist())
-                    else:
-                        valid_indices.extend(slot_df.index.tolist())
-                else:
-                    valid_indices.extend(slot_df.index.tolist())
-            df_sorted = df_sorted.loc[valid_indices].copy()
 
         df_encoded = pd.get_dummies(df_sorted, columns=CATEGORICAL_COLS, drop_first=False)
         
@@ -232,9 +221,7 @@ class MLTrainer:
         y = df_encoded[TARGET_COLUMN].astype(float)
 
         # Outlier handling & Target Log Transformation (Phase 7)
-        q_99 = y.quantile(0.99)
-        y_capped = y.clip(upper=q_99)
-        y_trans = np.log1p(y_capped)
+        y_trans = np.log1p(y)
 
         # 2. TUNING CANDIDATE MODELS (XGBoost CV sweep) (Phase 7)
         best_xgb_r2 = -999.0

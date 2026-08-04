@@ -28,7 +28,7 @@ def test_feature_engineer():
         "slot_type": "12H Day"
     })
     assert feats["month"] == 8
-    assert feats["is_weekend"] == 1
+    assert feats["is_weekend"] == 0
     assert feats["person_count"] == 8
     assert "demand_score" in feats
 

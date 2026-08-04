@@ -924,18 +924,15 @@ class PredictionEngine:
         # Adaptive Confidence Blending (Requirement 9)
         blended_price = float(np.round(w_ml * base_ml_price + w_hist * hist_w_med, -2))
 
-        # Dynamic Lead-Time Demand Curve Multiplier
-        lead_mult = 1.00
-        if lead_days <= 2:
-            lead_mult = 0.95  # -5% Last minute fill discount
-        elif 15 <= lead_days <= 30:
-            lead_mult = 1.05  # +5% Early advance booking premium
+        # Re-introduce Explicit Lead-Time Premium Guardrail
+        lead_days = float(features.get("lead_days", 0))
+        if lead_days > 45:
+            blended_price += 300.0
         elif lead_days > 30:
-            lead_mult = 1.10  # +10% Peak advance booking premium
-
-        blended_price = float(blended_price * lead_mult)
-
-
+            blended_price += 200.0
+        elif lead_days > 15:
+            blended_price += 100.0
+        
         # Product Engineering Dynamic Soft Bounds (P25 - P75 Segment Bounds)
         p25_val = float(features.get("segment_p25", features.get("p25_price", 0.0)))
         p75_val = float(features.get("segment_p75", features.get("p75_price", 0.0)))
@@ -944,16 +941,39 @@ class PredictionEngine:
 
         recommended_price = float(np.round(blended_price, -2))
 
-        # Senior AI/ML Monotonic Non-Decreasing Person Count Guardrail (Empirical Excel Slope +₹50/person)
+        # Senior AI/ML Monotonic Non-Decreasing Person Count Guardrail (using dynamic marginal cost)
         if person_count > 4 and not is_batch:
             try:
                 base_4_req = dict(request_data)
                 base_4_req["person_count"] = 4
-                base_4_res = self.predict(base_4_req, is_batch=True)
+                base_4_res = self.predict(base_4_req, is_batch=is_batch)
                 base_4_price = float(base_4_res.get("recommended_price", 0.0))
                 if base_4_price > 0:
-                    min_guest_floor = base_4_price + (person_count - 4) * 50.0
-                    recommended_price = float(np.round(max(recommended_price, min_guest_floor), -2))
+                    # Fetch dynamic marginal guest cost from averages if available, else 50.0
+                    marginal_cost = 50.0
+                    avg_path = DATA_DIR / "group_averages.json"
+                    if avg_path.exists():
+                        try:
+                            import json
+                            with open(avg_path, "r") as f:
+                                avg_dict = json.load(f)
+                            slot_norm = slot_engine.normalize_commercial_slot(commercial_slot)
+                            marginal_cost = float(avg_dict.get(f"marginal_guest_cost_{slot_norm}", avg_dict.get("marginal_guest_cost_global", 50.0)))
+                        except:
+                            pass
+                    
+                    # Strict Couple Slot Logic (Minimal extra guest charge)
+                    if "COUPLE" in str(commercial_slot).upper():
+                        marginal_cost = min(35.0, marginal_cost)
+                        
+                    # Floor & Ceiling Guardrails for extra guests
+                    extra_guests = max(0, person_count - 4)
+                    min_guest_floor = base_4_price + (extra_guests * marginal_cost)
+                    # We also add a ceiling so it doesn't randomly jump higher than expected
+                    max_guest_cap = base_4_price + (extra_guests * marginal_cost * 1.5)
+                    
+                    # Force the model's recommended price within these logical bounds
+                    recommended_price = float(np.round(np.clip(recommended_price, min_guest_floor, max_guest_cap), -2))
             except Exception as e:
                 pass
 
@@ -1292,12 +1312,12 @@ class PredictionEngine:
 
             total_count = len(df)
             
-            # Senior AI/ML Festival Isolation Guardrail:
-            # If target date is a normal non-festival date, filter out festival spike records (Dhuleti, Diwali, Holi, etc.)
-            if is_festival == 0 and "is_festival" in df.columns:
-                df_non_fest = df[pd.to_numeric(df["is_festival"], errors="coerce").fillna(0) == 0]
-                if len(df_non_fest) >= 5:
-                    df = df_non_fest
+            # User Request: Strictly exclude extended stays and festival records from historical averages
+            if "extended_stay" in df.columns:
+                df = df[pd.to_numeric(df["extended_stay"], errors="coerce").fillna(0) == 0]
+                
+            if "is_festival" in df.columns:
+                df = df[pd.to_numeric(df["is_festival"], errors="coerce").fillna(0) == 0]
 
             
             # Duration-aware filtering (ensures 120H bookings never pollute 24H booking baselines)
@@ -1407,8 +1427,22 @@ class PredictionEngine:
                 
                 # Normalize historical raw price to 4-guest baseline and adjust for target query guest count
                 hist_guests = safe_int(row.get("person_count"), 4)
-                base_p_val = raw_p_val - max(0, hist_guests - 4) * 50.0
-                p_val = base_p_val + max(0, person_count - 4) * 50.0
+                
+                # Fetch dynamic marginal guest cost from averages if available, else 50.0
+                marginal_cost = 50.0
+                avg_path = DATA_DIR / "group_averages.json"
+                if avg_path.exists():
+                    try:
+                        import json
+                        with open(avg_path, "r") as f:
+                            avg_dict = json.load(f)
+                        slot_norm = slot_engine.normalize_commercial_slot(slot)
+                        marginal_cost = float(avg_dict.get(f"marginal_guest_cost_{slot_norm}", avg_dict.get("marginal_guest_cost_global", 50.0)))
+                    except:
+                        pass
+                        
+                base_p_val = raw_p_val - max(0, hist_guests - 4) * marginal_cost
+                p_val = base_p_val + max(0, person_count - 4) * marginal_cost
 
 
                 prices_list.append(p_val)

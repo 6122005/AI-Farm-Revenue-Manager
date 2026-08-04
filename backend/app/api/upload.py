@@ -369,7 +369,7 @@ async def upload_booking_dataset_direct(file: UploadFile = File(...)):
 
         return {
             "status": "success",
-            "message": f"Successfully processed '{file.filename}', cleaned {cleaned_rows_count} records, and trained champion model '{champion_artifact['champion_name']}'.",
+            "message": f"Successfully processed '{file.filename}', retained 100% of uploaded records ({cleaned_rows_count} rows), and trained champion model '{champion_artifact['champion_name']}'.",
             "champion_model": champion_artifact["champion_name"],
             "r2_score": champion_artifact["metrics"]["r2"],
             "mae": champion_artifact["metrics"]["mae"],

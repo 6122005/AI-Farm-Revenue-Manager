@@ -1,520 +1,509 @@
 [
   {
-    "version_id": "20260731_150418",
-    "champion_name": "CatBoost",
+    "version_id": "20260804_134621",
+    "champion_name": "XGBoost",
     "promoted": false,
     "metrics": {
-      "r2": 0.8565886202342542,
-      "mae": 468.25698000209627,
-      "rmse": 875.549331622645,
-      "mape": 18.864239946838463,
-      "prediction_interval_coverage": 90.0,
+      "r2": 0.9501297437645441,
+      "mae": 317.31655898686756,
+      "rmse": 585.0992085378429,
+      "mape": 12.421673671957507,
+      "prediction_interval_coverage": 89.92366412213741,
       "validation_strategy": "TimeSeriesSplit(n_splits=5)",
       "feature_importances": {
-        "effective_daily_rate": 35.38544325439083,
-        "month_weather_slot_avg": 12.44326369092293,
-        "commercial_units": 9.773457789202178,
-        "duration_hours": 6.4929945385440755,
-        "segment_weighted_median": 4.477030747707875,
-        "slot_utilization_ratio": 4.416707191377916,
-        "rolling_price_mean_30": 3.699011514832715,
-        "slot_capacity_hours": 3.6422062059016467,
-        "opportunity_cost_factor": 3.4591707097860422,
-        "person_count": 1.4055113081464423
+        "rolling_price_mean_30": 0.26152583956718445,
+        "hierarchical_fallback_avg": 0.24018628895282745,
+        "is_extended_booking": 0.06042760983109474,
+        "effective_daily_rate": 0.0546882264316082,
+        "slot_type_12H Day": 0.04047736898064613,
+        "slot_utilization_ratio": 0.037280041724443436,
+        "extended_stay": 0.03269261121749878,
+        "month_weekend_slot_avg": 0.02658015303313732,
+        "commercial_units": 0.025814050808548927,
+        "duration_hours": 0.025345537811517715
       }
     },
-    "trained_at": "2026-07-31T15:05:02.731431",
-    "artifact_path": "/home/ebl-01/Desktop/farm/backend/models_store/version_history/model_20260731_150418.joblib"
+    "trained_at": "2026-08-04T13:46:58.500634",
+    "artifact_path": "/Users/darshankanani/AI-Farm-Revenue-Manager/backend/models_store/version_history/model_20260804_134621.joblib"
   },
   {
-    "version_id": "20260731_110303",
-    "champion_name": "CatBoost",
+    "version_id": "20260804_133808",
+    "champion_name": "XGBoost",
     "promoted": false,
     "metrics": {
-      "r2": 0.8673094650082716,
-      "mae": 450.25178029303214,
-      "rmse": 842.1874904879857,
-      "mape": 17.94297564725569,
-      "prediction_interval_coverage": 90.0,
+      "r2": 0.9455277676326187,
+      "mae": 317.1943798589833,
+      "rmse": 611.4997695602292,
+      "mape": 12.291257848313519,
+      "prediction_interval_coverage": 89.92366412213741,
       "validation_strategy": "TimeSeriesSplit(n_splits=5)",
       "feature_importances": {
-        "effective_daily_rate": 33.21614117687382,
-        "duration_hours": 14.593330607398718,
-        "commercial_units": 13.895504927623744,
-        "slot_capacity_hours": 5.244833507719032,
-        "segment_trimmed_mean": 4.490717981207197,
-        "opportunity_cost_factor": 4.367160608914311,
-        "segment_weighted_median": 3.975788635468624,
-        "month_guest_slot_avg": 3.2193710355793086,
-        "month_weather_slot_avg": 2.872813952084197,
-        "slot_utilization_ratio": 2.206497894333442
+        "rolling_price_mean_30": 0.36188796162605286,
+        "month_slot_avg": 0.25388598442077637,
+        "effective_daily_rate": 0.07808859646320343,
+        "hierarchical_fallback_avg": 0.045749180018901825,
+        "duration_hours": 0.04555326700210571,
+        "slot_utilization_ratio": 0.03939712420105934,
+        "commercial_units": 0.036331143230199814,
+        "extended_stay": 0.03538685292005539,
+        "month_7": 0.019862493500113487,
+        "person_count": 0.01196827832609415
       }
     },
-    "trained_at": "2026-07-31T11:03:53.755542",
-    "artifact_path": "/home/ebl-01/Desktop/farm/backend/models_store/version_history/model_20260731_110303.joblib"
+    "trained_at": "2026-08-04T13:38:43.354382",
+    "artifact_path": "/Users/darshankanani/AI-Farm-Revenue-Manager/backend/models_store/version_history/model_20260804_133808.joblib"
   },
   {
-    "version_id": "20260731_102216",
-    "champion_name": "CatBoost",
+    "version_id": "20260804_122420",
+    "champion_name": "XGBoost",
     "promoted": false,
     "metrics": {
-      "r2": 0.8673094650082716,
-      "mae": 450.25178029303214,
-      "rmse": 842.1874904879857,
-      "mape": 17.94297564725569,
-      "prediction_interval_coverage": 90.0,
+      "r2": 0.9443850402372733,
+      "mae": 313.8239764733777,
+      "rmse": 617.8805500485778,
+      "mape": 12.219419902380361,
+      "prediction_interval_coverage": 89.92366412213741,
       "validation_strategy": "TimeSeriesSplit(n_splits=5)",
       "feature_importances": {
-        "effective_daily_rate": 33.21614117687382,
-        "duration_hours": 14.593330607398718,
-        "commercial_units": 13.895504927623744,
-        "slot_capacity_hours": 5.244833507719032,
-        "segment_trimmed_mean": 4.490717981207197,
-        "opportunity_cost_factor": 4.367160608914311,
-        "segment_weighted_median": 3.975788635468624,
-        "month_guest_slot_avg": 3.2193710355793086,
-        "month_weather_slot_avg": 2.872813952084197,
-        "slot_utilization_ratio": 2.206497894333442
+        "rolling_price_mean_30": 0.3253253400325775,
+        "hierarchical_fallback_avg": 0.2588127851486206,
+        "effective_daily_rate": 0.06341180205345154,
+        "commercial_units": 0.04352859407663345,
+        "extended_stay": 0.034477878361940384,
+        "duration_hours": 0.030181240290403366,
+        "month_2": 0.02714795432984829,
+        "slot_utilization_ratio": 0.022080903872847557,
+        "month_weekend_slot_avg": 0.016446897760033607,
+        "month_7": 0.016254646703600883
       }
     },
-    "trained_at": "2026-07-31T10:22:59.794113",
-    "artifact_path": "/home/ebl-01/Desktop/farm/backend/models_store/version_history/model_20260731_102216.joblib"
+    "trained_at": "2026-08-04T12:24:58.236468",
+    "artifact_path": "/Users/darshankanani/AI-Farm-Revenue-Manager/backend/models_store/version_history/model_20260804_122420.joblib"
   },
   {
-    "version_id": "20260730_170613",
-    "champion_name": "CatBoost",
-    "promoted": false,
-    "metrics": {
-      "r2": 0.8673094650082716,
-      "mae": 450.25178029303214,
-      "rmse": 842.1874904879857,
-      "mape": 17.94297564725569,
-      "prediction_interval_coverage": 90.0,
-      "validation_strategy": "TimeSeriesSplit(n_splits=5)",
-      "feature_importances": {
-        "effective_daily_rate": 33.21614117687382,
-        "duration_hours": 14.593330607398718,
-        "commercial_units": 13.895504927623744,
-        "slot_capacity_hours": 5.244833507719032,
-        "segment_trimmed_mean": 4.490717981207197,
-        "opportunity_cost_factor": 4.367160608914311,
-        "segment_weighted_median": 3.975788635468624,
-        "month_guest_slot_avg": 3.2193710355793086,
-        "month_weather_slot_avg": 2.872813952084197,
-        "slot_utilization_ratio": 2.206497894333442
-      }
-    },
-    "trained_at": "2026-07-30T17:06:56.571252",
-    "artifact_path": "/home/ebl-01/Desktop/farm/backend/models_store/version_history/model_20260730_170613.joblib"
-  },
-  {
-    "version_id": "20260730_150630",
-    "champion_name": "CatBoost",
-    "promoted": false,
-    "metrics": {
-      "r2": 0.8673094650082716,
-      "mae": 450.25178029303214,
-      "rmse": 842.1874904879857,
-      "mape": 17.94297564725569,
-      "prediction_interval_coverage": 90.0,
-      "validation_strategy": "TimeSeriesSplit(n_splits=5)",
-      "feature_importances": {
-        "effective_daily_rate": 33.21614117687382,
-        "duration_hours": 14.593330607398718,
-        "commercial_units": 13.895504927623744,
-        "slot_capacity_hours": 5.244833507719032,
-        "segment_trimmed_mean": 4.490717981207197,
-        "opportunity_cost_factor": 4.367160608914311,
-        "segment_weighted_median": 3.975788635468624,
-        "month_guest_slot_avg": 3.2193710355793086,
-        "month_weather_slot_avg": 2.872813952084197,
-        "slot_utilization_ratio": 2.206497894333442
-      }
-    },
-    "trained_at": "2026-07-30T15:07:15.043942",
-    "artifact_path": "/home/ebl-01/Desktop/farm/backend/models_store/version_history/model_20260730_150630.joblib"
-  },
-  {
-    "version_id": "20260730_104706",
-    "champion_name": "CatBoost",
-    "promoted": false,
-    "metrics": {
-      "r2": 0.8673094650082716,
-      "mae": 450.25178029303214,
-      "rmse": 842.1874904879857,
-      "mape": 17.94297564725569,
-      "prediction_interval_coverage": 90.0,
-      "validation_strategy": "TimeSeriesSplit(n_splits=5)",
-      "feature_importances": {
-        "effective_daily_rate": 33.21614117687382,
-        "duration_hours": 14.593330607398718,
-        "commercial_units": 13.895504927623744,
-        "slot_capacity_hours": 5.244833507719032,
-        "segment_trimmed_mean": 4.490717981207197,
-        "opportunity_cost_factor": 4.367160608914311,
-        "segment_weighted_median": 3.975788635468624,
-        "month_guest_slot_avg": 3.2193710355793086,
-        "month_weather_slot_avg": 2.872813952084197,
-        "slot_utilization_ratio": 2.206497894333442
-      }
-    },
-    "trained_at": "2026-07-30T10:47:54.564637",
-    "artifact_path": "/home/ebl-01/Desktop/farm/backend/models_store/version_history/model_20260730_104706.joblib"
-  },
-  {
-    "version_id": "20260730_094045",
-    "champion_name": "CatBoost",
-    "promoted": false,
-    "metrics": {
-      "r2": 0.8673094650082716,
-      "mae": 450.25178029303214,
-      "rmse": 842.1874904879857,
-      "mape": 17.94297564725569,
-      "prediction_interval_coverage": 90.0,
-      "validation_strategy": "TimeSeriesSplit(n_splits=5)",
-      "feature_importances": {
-        "effective_daily_rate": 33.21614117687382,
-        "duration_hours": 14.593330607398718,
-        "commercial_units": 13.895504927623744,
-        "slot_capacity_hours": 5.244833507719032,
-        "segment_trimmed_mean": 4.490717981207197,
-        "opportunity_cost_factor": 4.367160608914311,
-        "segment_weighted_median": 3.975788635468624,
-        "month_guest_slot_avg": 3.2193710355793086,
-        "month_weather_slot_avg": 2.872813952084197,
-        "slot_utilization_ratio": 2.206497894333442
-      }
-    },
-    "trained_at": "2026-07-30T09:41:33.057349",
-    "artifact_path": "/home/ebl-01/Desktop/farm/backend/models_store/version_history/model_20260730_094045.joblib"
-  },
-  {
-    "version_id": "20260729_155648",
-    "champion_name": "CatBoost",
-    "promoted": false,
-    "metrics": {
-      "r2": 0.8673094650082716,
-      "mae": 450.25178029303214,
-      "rmse": 842.1874904879857,
-      "mape": 17.94297564725569,
-      "prediction_interval_coverage": 90.0,
-      "validation_strategy": "TimeSeriesSplit(n_splits=5)",
-      "feature_importances": {
-        "effective_daily_rate": 33.21614117687382,
-        "duration_hours": 14.593330607398718,
-        "commercial_units": 13.895504927623744,
-        "slot_capacity_hours": 5.244833507719032,
-        "segment_trimmed_mean": 4.490717981207197,
-        "opportunity_cost_factor": 4.367160608914311,
-        "segment_weighted_median": 3.975788635468624,
-        "month_guest_slot_avg": 3.2193710355793086,
-        "month_weather_slot_avg": 2.872813952084197,
-        "slot_utilization_ratio": 2.206497894333442
-      }
-    },
-    "trained_at": "2026-07-29T15:57:33.403698",
-    "artifact_path": "/home/ebl-01/Desktop/farm/backend/models_store/version_history/model_20260729_155648.joblib"
-  },
-  {
-    "version_id": "20260729_145336",
-    "champion_name": "CatBoost",
-    "promoted": false,
-    "metrics": {
-      "r2": 0.8673094650082716,
-      "mae": 450.25178029303214,
-      "rmse": 842.1874904879857,
-      "mape": 17.94297564725569,
-      "prediction_interval_coverage": 90.0,
-      "validation_strategy": "TimeSeriesSplit(n_splits=5)",
-      "feature_importances": {
-        "effective_daily_rate": 33.21614117687382,
-        "duration_hours": 14.593330607398718,
-        "commercial_units": 13.895504927623744,
-        "slot_capacity_hours": 5.244833507719032,
-        "segment_trimmed_mean": 4.490717981207197,
-        "opportunity_cost_factor": 4.367160608914311,
-        "segment_weighted_median": 3.975788635468624,
-        "month_guest_slot_avg": 3.2193710355793086,
-        "month_weather_slot_avg": 2.872813952084197,
-        "slot_utilization_ratio": 2.206497894333442
-      }
-    },
-    "trained_at": "2026-07-29T15:00:54.809151",
-    "artifact_path": "/home/ebl-01/Desktop/farm/backend/models_store/version_history/model_20260729_145336.joblib"
-  },
-  {
-    "version_id": "20260729_102909",
-    "champion_name": "CatBoost",
+    "version_id": "20260804_120400",
+    "champion_name": "XGBoost",
     "promoted": true,
     "metrics": {
-      "r2": 0.8673094650082716,
-      "mae": 450.25178029303214,
-      "rmse": 842.1874904879857,
-      "mape": 17.94297564725569,
-      "prediction_interval_coverage": 90.0,
+      "r2": 0.9458239342762802,
+      "mae": 311.298171927404,
+      "rmse": 609.8351354246546,
+      "mape": 11.52586766409119,
+      "prediction_interval_coverage": 89.92366412213741,
       "validation_strategy": "TimeSeriesSplit(n_splits=5)",
       "feature_importances": {
-        "effective_daily_rate": 33.21614117687382,
-        "duration_hours": 14.593330607398718,
-        "commercial_units": 13.895504927623744,
-        "slot_capacity_hours": 5.244833507719032,
-        "segment_trimmed_mean": 4.490717981207197,
-        "opportunity_cost_factor": 4.367160608914311,
-        "segment_weighted_median": 3.975788635468624,
-        "month_guest_slot_avg": 3.2193710355793086,
-        "month_weather_slot_avg": 2.872813952084197,
-        "slot_utilization_ratio": 2.206497894333442
+        "month_slot_avg": 0.41254496574401855,
+        "rolling_price_mean_30": 0.1743493527173996,
+        "effective_daily_rate": 0.0457984022796154,
+        "is_extended_booking": 0.039499275386333466,
+        "segment_trimmed_mean": 0.035235803574323654,
+        "extended_stay": 0.03283267840743065,
+        "commercial_units": 0.026427166536450386,
+        "segment_mean": 0.022770818322896957,
+        "slot_utilization_ratio": 0.02229628898203373,
+        "duration_hours": 0.022168662399053574
       }
     },
-    "trained_at": "2026-07-29T10:29:53.875609",
-    "artifact_path": "/home/ebl-01/Desktop/farm/backend/models_store/version_history/model_20260729_102909.joblib"
+    "trained_at": "2026-08-04T12:04:36.618038",
+    "artifact_path": "/Users/darshankanani/AI-Farm-Revenue-Manager/backend/models_store/version_history/model_20260804_120400.joblib"
   },
   {
-    "version_id": "20260729_101910",
-    "champion_name": "CatBoost",
+    "version_id": "20260804_120147",
+    "champion_name": "XGBoost",
     "promoted": true,
     "metrics": {
-      "r2": 0.8696250005018673,
-      "mae": 444.5698735613413,
-      "rmse": 834.8067915928553,
-      "mape": 17.401409666095432,
-      "prediction_interval_coverage": 90.0,
+      "r2": 0.9447211531268566,
+      "mae": 314.45240804679804,
+      "rmse": 616.010618394473,
+      "mape": 11.569261430545595,
+      "prediction_interval_coverage": 89.92366412213741,
       "validation_strategy": "TimeSeriesSplit(n_splits=5)",
       "feature_importances": {
-        "effective_daily_rate": 33.71522037320093,
-        "commercial_units": 12.480617012001382,
-        "duration_hours": 10.474258531653685,
-        "similarity_weighted_mean": 8.541433745742602,
-        "similarity_weighted_median": 7.059529271093399,
-        "opportunity_cost_factor": 4.650551532421537,
-        "slot_utilization_ratio": 3.225199092389529,
-        "segment_median": 1.7430835866674002,
-        "p25_price": 1.612459454663222,
-        "p75_price": 1.2171867149371762
+        "segment_mean": 0.23439376056194305,
+        "month_slot_avg": 0.21882027387619019,
+        "rolling_price_mean_30": 0.14644822478294373,
+        "effective_daily_rate": 0.04162487015128136,
+        "is_extended_booking": 0.03630589693784714,
+        "segment_trimmed_mean": 0.03180404007434845,
+        "hierarchical_fallback_avg": 0.028148679062724113,
+        "p75_price": 0.024412645027041435,
+        "slot_utilization_ratio": 0.023901520296931267,
+        "commercial_units": 0.022918114438652992
       }
     },
-    "trained_at": "2026-07-29T10:19:55.313669",
-    "artifact_path": "/home/ebl-01/Desktop/farm/backend/models_store/version_history/model_20260729_101910.joblib"
+    "trained_at": "2026-08-04T12:02:24.233064",
+    "artifact_path": "/Users/darshankanani/AI-Farm-Revenue-Manager/backend/models_store/version_history/model_20260804_120147.joblib"
   },
   {
-    "version_id": "20260729_100706",
-    "champion_name": "CatBoost",
+    "version_id": "20260804_114111",
+    "champion_name": "XGBoost",
     "promoted": true,
     "metrics": {
-      "r2": 0.8673212885273335,
-      "mae": 447.9579045169127,
-      "rmse": 842.1499676847245,
-      "mape": 17.920455323913796,
-      "prediction_interval_coverage": 90.0,
+      "r2": 0.9286214341543081,
+      "mae": 337.4196738210041,
+      "rmse": 699.9912635411266,
+      "mape": 12.516361328659364,
+      "prediction_interval_coverage": 89.92366412213741,
       "validation_strategy": "TimeSeriesSplit(n_splits=5)",
       "feature_importances": {
-        "effective_daily_rate": 38.72012853095683,
-        "commercial_units": 21.216718007874594,
-        "duration_hours": 5.177584776561702,
-        "opportunity_cost_factor": 4.816327305596889,
-        "segment_median": 2.9455514477488336,
-        "p25_price": 2.892787776128842,
-        "month_leadtime_slot_avg": 2.86559324485264,
-        "slot_utilization_ratio": 2.688450647782589,
-        "rolling_price_mean_30": 2.0580878642076215,
-        "p75_price": 1.941648420304115
+        "segment_median": 0.8752543926239014,
+        "rolling_price_mean_30": 0.03895703703165054,
+        "p75_price": 0.02479769103229046,
+        "p25_price": 0.007628188468515873,
+        "effective_daily_rate": 0.007093177642673254,
+        "segment_mean": 0.006366398651152849,
+        "segment_trimmed_mean": 0.00451270118355751,
+        "commercial_units": 0.003583515528589487,
+        "slot_utilization_ratio": 0.003546578111127019,
+        "duration_hours": 0.002903154818341136
       }
     },
-    "trained_at": "2026-07-29T10:14:26.035647",
-    "artifact_path": "/home/ebl-01/Desktop/farm/backend/models_store/version_history/model_20260729_100706.joblib"
+    "trained_at": "2026-08-04T11:41:47.831558",
+    "artifact_path": "/Users/darshankanani/AI-Farm-Revenue-Manager/backend/models_store/version_history/model_20260804_114111.joblib"
   },
   {
-    "version_id": "20260729_095047",
-    "champion_name": "CatBoost",
+    "version_id": "20260804_112250",
+    "champion_name": "XGBoost",
     "promoted": false,
     "metrics": {
-      "r2": 0.8673212885273335,
-      "mae": 447.9579045169127,
-      "rmse": 842.1499676847245,
-      "mape": 17.920455323913796,
+      "r2": 0.870252979634769,
+      "mae": 364.65479775080604,
+      "rmse": 823.445587639879,
+      "mape": 16.763295839934322,
       "prediction_interval_coverage": 90.0,
       "validation_strategy": "TimeSeriesSplit(n_splits=5)",
       "feature_importances": {
-        "effective_daily_rate": 38.72012853095683,
-        "commercial_units": 21.216718007874594,
-        "duration_hours": 5.177584776561702,
-        "opportunity_cost_factor": 4.816327305596889,
-        "segment_median": 2.9455514477488336,
-        "p25_price": 2.892787776128842,
-        "month_leadtime_slot_avg": 2.86559324485264,
-        "slot_utilization_ratio": 2.688450647782589,
-        "rolling_price_mean_30": 2.0580878642076215,
-        "p75_price": 1.941648420304115
+        "p25_price": 0.24620912969112396,
+        "segment_mean": 0.21540844440460205,
+        "rolling_price_mean_30": 0.18822181224822998,
+        "segment_trimmed_mean": 0.09094269573688507,
+        "slot_type_12H Day": 0.07134915143251419,
+        "slot_month_weekend_diff": 0.041834574192762375,
+        "effective_daily_rate": 0.037319719791412354,
+        "duration_hours": 0.022525928914546967,
+        "opportunity_cost_factor": 0.015277494676411152,
+        "commercial_units": 0.015085696242749691
       }
     },
-    "trained_at": "2026-07-29T09:51:31.057113",
-    "artifact_path": "/home/ebl-01/Desktop/farm/backend/models_store/version_history/model_20260729_095047.joblib"
+    "trained_at": "2026-08-04T11:23:26.322544",
+    "artifact_path": "/Users/darshankanani/AI-Farm-Revenue-Manager/backend/models_store/version_history/model_20260804_112250.joblib"
   },
   {
-    "version_id": "20260729_094930",
-    "champion_name": "CatBoost",
+    "version_id": "20260804_111821",
+    "champion_name": "XGBoost",
     "promoted": false,
     "metrics": {
-      "r2": 0.8682469109109071,
-      "mae": 468.67630029804246,
-      "rmse": 839.2072304243158,
-      "mape": 19.109982683344555,
+      "r2": 0.870252979634769,
+      "mae": 364.65479775080604,
+      "rmse": 823.445587639879,
+      "mape": 16.763295839934322,
       "prediction_interval_coverage": 90.0,
       "validation_strategy": "TimeSeriesSplit(n_splits=5)",
       "feature_importances": {
-        "effective_daily_rate": 34.014390396097,
-        "commercial_units": 15.797367629657174,
-        "duration_hours": 10.078774861448704,
-        "month_slot_avg": 8.22754774703424,
-        "opportunity_cost_factor": 7.072931512139499,
-        "rolling_price_mean_30": 4.947155808629693,
-        "month_weekend_slot_avg": 3.570646610633897,
-        "slot_utilization_ratio": 3.2130443457122757,
-        "slot_capacity_hours": 1.8496436927689877,
-        "is_couple": 1.3788220413686527
+        "p25_price": 0.24620912969112396,
+        "segment_mean": 0.21540844440460205,
+        "rolling_price_mean_30": 0.18822181224822998,
+        "segment_trimmed_mean": 0.09094269573688507,
+        "slot_type_12H Day": 0.07134915143251419,
+        "slot_month_weekend_diff": 0.041834574192762375,
+        "effective_daily_rate": 0.037319719791412354,
+        "duration_hours": 0.022525928914546967,
+        "opportunity_cost_factor": 0.015277494676411152,
+        "commercial_units": 0.015085696242749691
       }
     },
-    "trained_at": "2026-07-29T09:50:12.458388",
-    "artifact_path": "/home/ebl-01/Desktop/farm/backend/models_store/version_history/model_20260729_094930.joblib"
+    "trained_at": "2026-08-04T11:18:56.263802",
+    "artifact_path": "/Users/darshankanani/AI-Farm-Revenue-Manager/backend/models_store/version_history/model_20260804_111821.joblib"
   },
   {
-    "version_id": "20260729_094820",
-    "champion_name": "CatBoost",
-    "promoted": true,
-    "metrics": {
-      "r2": 0.8682469109109071,
-      "mae": 468.67630029804246,
-      "rmse": 839.2072304243158,
-      "mape": 19.109982683344555,
-      "prediction_interval_coverage": 90.0,
-      "validation_strategy": "TimeSeriesSplit(n_splits=5)",
-      "feature_importances": {
-        "effective_daily_rate": 34.014390396097,
-        "commercial_units": 15.797367629657174,
-        "duration_hours": 10.078774861448704,
-        "month_slot_avg": 8.22754774703424,
-        "opportunity_cost_factor": 7.072931512139499,
-        "rolling_price_mean_30": 4.947155808629693,
-        "month_weekend_slot_avg": 3.570646610633897,
-        "slot_utilization_ratio": 3.2130443457122757,
-        "slot_capacity_hours": 1.8496436927689877,
-        "is_couple": 1.3788220413686527
-      }
-    },
-    "trained_at": "2026-07-29T09:49:01.523296",
-    "artifact_path": "/home/ebl-01/Desktop/farm/backend/models_store/version_history/model_20260729_094820.joblib"
-  },
-  {
-    "version_id": "20260729_093008",
-    "champion_name": "CatBoost",
-    "promoted": true,
-    "metrics": {
-      "r2": 0.8682469109109071,
-      "mae": 468.67630029804246,
-      "rmse": 839.2072304243158,
-      "mape": 19.109982683344555,
-      "prediction_interval_coverage": 90.0,
-      "validation_strategy": "TimeSeriesSplit(n_splits=5)",
-      "feature_importances": {
-        "effective_daily_rate": 34.014390396097,
-        "commercial_units": 15.797367629657174,
-        "duration_hours": 10.078774861448704,
-        "month_slot_avg": 8.22754774703424,
-        "opportunity_cost_factor": 7.072931512139499,
-        "rolling_price_mean_30": 4.947155808629693,
-        "month_weekend_slot_avg": 3.570646610633897,
-        "slot_utilization_ratio": 3.2130443457122757,
-        "slot_capacity_hours": 1.8496436927689877,
-        "is_couple": 1.3788220413686527
-      }
-    },
-    "trained_at": "2026-07-29T09:30:46.595621",
-    "artifact_path": "/home/ebl-01/Desktop/farm/backend/models_store/version_history/model_20260729_093008.joblib"
-  },
-  {
-    "version_id": "20260729_092849",
-    "champion_name": "ExtraTrees",
-    "promoted": true,
-    "metrics": {
-      "r2": -0.1944919776391798,
-      "mae": 1977.811311135728,
-      "rmse": 3382.40415982452,
-      "mape": 21.182205318457704,
-      "prediction_interval_coverage": 89.74358974358975,
-      "validation_strategy": "TimeSeriesSplit(n_splits=5)",
-      "feature_importances": {
-        "slot_capacity_hours": 0.29559412020145925,
-        "hierarchical_fallback_avg": 0.1468839208006918,
-        "duration_hours": 0.121277257609893,
-        "rolling_price_mean_30": 0.0995262879481443,
-        "commercial_units": 0.09853127244676918,
-        "effective_daily_rate": 0.09701668975888954,
-        "competitor_diff": 0.05321968074588163,
-        "competitor_price": 0.04668426952647509,
-        "is_couple": 0.011183995152993002,
-        "is_weekend": 0.008182770454659738
-      }
-    },
-    "trained_at": "2026-07-29T09:29:08.137656",
-    "artifact_path": "/home/ebl-01/Desktop/farm/backend/models_store/version_history/model_20260729_092849.joblib"
-  },
-  {
-    "version_id": "20260727_121708",
+    "version_id": "20260804_110559",
     "champion_name": "StackingEnsemble",
     "promoted": false,
     "metrics": {
-      "r2": 0.8520157998815683,
-      "mae": 631.3880348810067,
-      "rmse": 889.3986961447825,
-      "mape": 23.69240491054514,
+      "r2": 0.8663258055169833,
+      "mae": 848.9052793934626,
+      "rmse": 1389.8047556493125,
+      "mape": 8.555069647889404,
       "prediction_interval_coverage": 90.0,
       "validation_strategy": "TimeSeriesSplit(n_splits=5)",
       "feature_importances": {}
     },
-    "trained_at": "2026-07-27T12:17:43.933550",
-    "artifact_path": "/home/ebl-01/Desktop/farm/backend/models_store/version_history/model_20260727_121708.joblib"
+    "trained_at": "2026-08-04T11:06:24.193381",
+    "artifact_path": "/Users/darshankanani/AI-Farm-Revenue-Manager/backend/models_store/version_history/model_20260804_110559.joblib"
   },
   {
-    "version_id": "20260727_121620",
-    "champion_name": "StackingEnsemble",
-    "promoted": true,
+    "version_id": "20260804_103728",
+    "champion_name": "XGBoost",
+    "promoted": false,
     "metrics": {
-      "r2": 0.8520157998815683,
-      "mae": 631.3880348810067,
-      "rmse": 889.3986961447825,
-      "mape": 23.69240491054514,
+      "r2": 0.8708353874111285,
+      "mae": 356.03097175719245,
+      "rmse": 821.5953697738869,
+      "mape": 16.641228568835505,
+      "prediction_interval_coverage": 90.0,
+      "validation_strategy": "TimeSeriesSplit(n_splits=5)",
+      "feature_importances": {
+        "p25_price": 0.40894466638565063,
+        "segment_trimmed_mean": 0.15213783085346222,
+        "rolling_price_mean_30": 0.14206042885780334,
+        "segment_mean": 0.0749574527144432,
+        "opportunity_cost_factor": 0.03809808939695358,
+        "slot_type_12H Day": 0.03519890457391739,
+        "segment_median": 0.03402604162693024,
+        "effective_daily_rate": 0.02161700464785099,
+        "slot_month_weekend_diff": 0.020260613411664963,
+        "day_of_week_5": 0.012805464677512646
+      }
+    },
+    "trained_at": "2026-08-04T10:38:03.009377",
+    "artifact_path": "/Users/darshankanani/AI-Farm-Revenue-Manager/backend/models_store/version_history/model_20260804_103728.joblib"
+  },
+  {
+    "version_id": "20260804_103629",
+    "champion_name": "StackingEnsemble",
+    "promoted": false,
+    "metrics": {
+      "r2": 0.8662452378399464,
+      "mae": 849.6273624397139,
+      "rmse": 1390.2235218672838,
+      "mape": 8.553755634677461,
       "prediction_interval_coverage": 90.0,
       "validation_strategy": "TimeSeriesSplit(n_splits=5)",
       "feature_importances": {}
     },
-    "trained_at": "2026-07-27T12:16:55.037655",
-    "artifact_path": "/home/ebl-01/Desktop/farm/backend/models_store/version_history/model_20260727_121620.joblib"
+    "trained_at": "2026-08-04T10:36:53.596731",
+    "artifact_path": "/Users/darshankanani/AI-Farm-Revenue-Manager/backend/models_store/version_history/model_20260804_103629.joblib"
   },
   {
-    "version_id": "20260724_164813",
-    "champion_name": "ExtraTrees",
-    "promoted": false,
+    "version_id": "20260804_103159",
+    "champion_name": "XGBoost",
+    "promoted": true,
     "metrics": {
-      "r2": 0.8115278579004936,
-      "mae": 691.7218334005164,
-      "rmse": 1003.7195819315535,
-      "mape": 25.90919445195523,
+      "r2": 0.8755870046395344,
+      "mae": 373.18761761377726,
+      "rmse": 806.3416320666847,
+      "mape": 17.297269323890845,
       "prediction_interval_coverage": 90.0,
       "validation_strategy": "TimeSeriesSplit(n_splits=5)",
       "feature_importances": {
-        "slot_capacity_hours": 0.4586804954104683,
-        "duration_hours": 0.12207496260183838,
-        "slot_month_weekend_avg": 0.07817444498138722,
-        "is_couple": 0.06357319118338066,
-        "is_saturday_night": 0.027116365956983506,
-        "rolling_price_mean_30": 0.018006722199936938,
-        "month_4": 0.015078852518987215,
-        "month_weekend_slot_avg": 0.013305701653451489,
-        "hierarchical_fallback_avg": 0.011908209765419559,
-        "demand_score": 0.011701613929261027
+        "rolling_price_mean_30": 0.20252691209316254,
+        "month_slot_avg": 0.19461823999881744,
+        "month_leadtime_slot_avg": 0.11391794681549072,
+        "segment_median": 0.10155291110277176,
+        "season_summer": 0.050871435552835464,
+        "effective_daily_rate": 0.042847875505685806,
+        "wedding_season": 0.03496474400162697,
+        "p25_price": 0.033848732709884644,
+        "hierarchical_fallback_avg": 0.02749619074165821,
+        "month_weekend_slot_avg": 0.026064781472086906
       }
     },
-    "trained_at": "2026-07-24T16:48:59.569652",
-    "artifact_path": "/home/ebl-01/Desktop/farm/backend/models_store/version_history/model_20260724_164813.joblib"
+    "trained_at": "2026-08-04T10:32:34.290443",
+    "artifact_path": "/Users/darshankanani/AI-Farm-Revenue-Manager/backend/models_store/version_history/model_20260804_103159.joblib"
+  },
+  {
+    "version_id": "20260804_101832",
+    "champion_name": "StackingEnsemble",
+    "promoted": false,
+    "metrics": {
+      "r2": 0.8638387646555074,
+      "mae": 850.3926085978296,
+      "rmse": 1402.6740002060365,
+      "mape": 8.560946406972693,
+      "prediction_interval_coverage": 90.0,
+      "validation_strategy": "TimeSeriesSplit(n_splits=5)",
+      "feature_importances": {}
+    },
+    "trained_at": "2026-08-04T10:18:58.882836",
+    "artifact_path": "/Users/darshankanani/AI-Farm-Revenue-Manager/backend/models_store/version_history/model_20260804_101832.joblib"
+  },
+  {
+    "version_id": "20260804_101728",
+    "champion_name": "XGBoost",
+    "promoted": true,
+    "metrics": {
+      "r2": 0.8582367757219543,
+      "mae": 798.2407261439732,
+      "rmse": 1431.2638870247,
+      "mape": 8.205682277963382,
+      "prediction_interval_coverage": 90.0,
+      "validation_strategy": "TimeSeriesSplit(n_splits=5)",
+      "feature_importances": {
+        "month_festival_slot_avg": 0.6482818722724915,
+        "month_weekend_slot_avg": 0.11993440240621567,
+        "month_slot_avg": 0.0747705027461052,
+        "highest_revenue_weekday": 0.024489719420671463,
+        "effective_daily_rate": 0.02221628651022911,
+        "month_leadtime_slot_avg": 0.019943248480558395,
+        "competitor_diff": 0.017560577020049095,
+        "duration_hours": 0.015444998629391193,
+        "rolling_price_mean_30": 0.008350200951099396,
+        "competitor_price": 0.008012711070477962
+      }
+    },
+    "trained_at": "2026-08-04T10:17:52.749759",
+    "artifact_path": "/Users/darshankanani/AI-Farm-Revenue-Manager/backend/models_store/version_history/model_20260804_101728.joblib"
+  },
+  {
+    "version_id": "20260804_094918",
+    "champion_name": "XGBoost",
+    "promoted": false,
+    "metrics": {
+      "r2": 0.923124535827412,
+      "mae": 335.9818753974382,
+      "rmse": 675.9721249590303,
+      "mape": 13.903229176530541,
+      "prediction_interval_coverage": 89.92248062015504,
+      "validation_strategy": "TimeSeriesSplit(n_splits=5)",
+      "feature_importances": {
+        "rolling_price_mean_30": 0.35624223947525024,
+        "slot_type_12H Day": 0.25338679552078247,
+        "hierarchical_fallback_avg": 0.09787609428167343,
+        "effective_daily_rate": 0.0665280893445015,
+        "commercial_units": 0.04824727028608322,
+        "slot_utilization_ratio": 0.04531434550881386,
+        "duration_hours": 0.028694096952676773,
+        "is_saturday_day": 0.013743758201599121,
+        "extended_stay": 0.0089337807148695,
+        "month_guest_slot_avg": 0.008474094793200493
+      }
+    },
+    "trained_at": "2026-08-04T09:49:51.220259",
+    "artifact_path": "/Users/darshankanani/AI-Farm-Revenue-Manager/backend/models_store/version_history/model_20260804_094918.joblib"
+  },
+  {
+    "version_id": "20260804_092743",
+    "champion_name": "XGBoost",
+    "promoted": true,
+    "metrics": {
+      "r2": 0.9243300510368989,
+      "mae": 325.2539122115734,
+      "rmse": 670.6510862082602,
+      "mape": 13.636656183086945,
+      "prediction_interval_coverage": 89.92248062015504,
+      "validation_strategy": "TimeSeriesSplit(n_splits=5)",
+      "feature_importances": {
+        "rolling_price_mean_30": 0.35992199182510376,
+        "slot_type_12H Day": 0.15702404081821442,
+        "effective_daily_rate": 0.06492006033658981,
+        "opportunity_cost_factor": 0.05541350319981575,
+        "month_weekend_slot_avg": 0.041338562965393066,
+        "duration_hours": 0.03933841362595558,
+        "month_leadtime_slot_avg": 0.03678364306688309,
+        "slot_utilization_ratio": 0.03612726554274559,
+        "is_saturday_day": 0.03535078465938568,
+        "commercial_units": 0.03244803845882416
+      }
+    },
+    "trained_at": "2026-08-04T09:28:16.231804",
+    "artifact_path": "/Users/darshankanani/AI-Farm-Revenue-Manager/backend/models_store/version_history/model_20260804_092743.joblib"
+  },
+  {
+    "version_id": "20260803_165339",
+    "champion_name": "XGBoost",
+    "promoted": true,
+    "metrics": {
+      "r2": 0.9122965408604632,
+      "mae": 341.2733045578003,
+      "rmse": 723.7774903880992,
+      "mape": 14.664032931511587,
+      "prediction_interval_coverage": 90.0,
+      "validation_strategy": "TimeSeriesSplit(n_splits=5)",
+      "feature_importances": {
+        "rolling_price_mean_30": 0.3195914924144745,
+        "slot_type_12H Day": 0.16784872114658356,
+        "effective_daily_rate": 0.072895348072052,
+        "opportunity_cost_factor": 0.0668409988284111,
+        "month_leadtime_slot_avg": 0.05624617263674736,
+        "month_weekend_slot_avg": 0.0505046546459198,
+        "slot_utilization_ratio": 0.04650115966796875,
+        "duration_hours": 0.041212692856788635,
+        "commercial_units": 0.035403281450271606,
+        "is_saturday_day": 0.019130557775497437
+      }
+    },
+    "trained_at": "2026-08-03T16:54:13.239789",
+    "artifact_path": "/Users/darshankanani/AI-Farm-Revenue-Manager/backend/models_store/version_history/model_20260803_165339.joblib"
+  },
+  {
+    "version_id": "20260803_165222",
+    "champion_name": "RandomForest",
+    "promoted": false,
+    "metrics": {
+      "r2": 0.82933590165936,
+      "mae": 1029.2870159395973,
+      "rmse": 1468.4315567927592,
+      "mape": 12.902717001305398,
+      "prediction_interval_coverage": 89.58333333333334,
+      "validation_strategy": "TimeSeriesSplit(n_splits=5)",
+      "feature_importances": {
+        "effective_daily_rate": 0.258094745129895,
+        "month_weekend_slot_avg": 0.1717486069796397,
+        "competitor_diff": 0.13751263109834966,
+        "competitor_price": 0.1148042768004185,
+        "current_occupancy_pct": 0.08312206822489475,
+        "remaining_inventory": 0.07381156677539018,
+        "rolling_price_mean_30": 0.06206575256525185,
+        "month_weather_slot_avg": 0.01814033308405771,
+        "month_slot_avg": 0.01557846752309167,
+        "month_festival_slot_avg": 0.014648929708119941
+      }
+    },
+    "trained_at": "2026-08-03T16:52:43.117584",
+    "artifact_path": "/Users/darshankanani/AI-Farm-Revenue-Manager/backend/models_store/version_history/model_20260803_165222.joblib"
+  },
+  {
+    "version_id": "20260803_164621",
+    "champion_name": "XGBoost",
+    "promoted": false,
+    "metrics": {
+      "r2": 0.8921627090448259,
+      "mae": 371.21975291418653,
+      "rmse": 780.0181119174882,
+      "mape": 13.54886985361711,
+      "prediction_interval_coverage": 90.0,
+      "validation_strategy": "TimeSeriesSplit(n_splits=5)",
+      "feature_importances": {
+        "slot_type_12H Day": 0.6997372508049011,
+        "rolling_price_mean_30": 0.12386444956064224,
+        "commercial_units": 0.016483359038829803,
+        "month_weekend_slot_avg": 0.0147140147164464,
+        "opportunity_cost_factor": 0.013942083343863487,
+        "effective_daily_rate": 0.012594950385391712,
+        "is_saturday_day": 0.011228494346141815,
+        "day_of_week_5": 0.010905753821134567,
+        "duration_hours": 0.009016281925141811,
+        "month_guest_slot_avg": 0.008849549107253551
+      }
+    },
+    "trained_at": "2026-08-03T16:46:54.864418",
+    "artifact_path": "/Users/darshankanani/AI-Farm-Revenue-Manager/backend/models_store/version_history/model_20260803_164621.joblib"
+  },
+  {
+    "version_id": "20260803_153448",
+    "champion_name": "XGBoost",
+    "promoted": true,
+    "metrics": {
+      "r2": 0.8921627090448259,
+      "mae": 371.21975291418653,
+      "rmse": 780.0181119174882,
+      "mape": 13.54886985361711,
+      "prediction_interval_coverage": 90.0,
+      "validation_strategy": "TimeSeriesSplit(n_splits=5)",
+      "feature_importances": {
+        "slot_type_12H Day": 0.6997372508049011,
+        "rolling_price_mean_30": 0.12386444956064224,
+        "commercial_units": 0.016483359038829803,
+        "month_weekend_slot_avg": 0.0147140147164464,
+        "opportunity_cost_factor": 0.013942083343863487,
+        "effective_daily_rate": 0.012594950385391712,
+        "is_saturday_day": 0.011228494346141815,
+        "day_of_week_5": 0.010905753821134567,
+        "duration_hours": 0.009016281925141811,
+        "month_guest_slot_avg": 0.008849549107253551
+      }
+    },
+    "trained_at": "2026-08-03T15:35:21.472880",
+    "artifact_path": "/Users/darshankanani/AI-Farm-Revenue-Manager/backend/models_store/version_history/model_20260803_153448.joblib"
   }
 ]

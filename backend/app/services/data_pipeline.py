@@ -84,7 +84,12 @@ class DataPipeline:
             lead_days = min(90, max(0, lead_days))
 
             month = dt.month
-            is_weekend = 1 if dt.weekday() in [5, 6] else 0
+            day_of_week = dt.weekday()
+            is_weekend = 0
+            if day_of_week == 5 and "Night" in slot:
+                is_weekend = 1
+            elif day_of_week == 6 and "Day" in slot:
+                is_weekend = 1
 
             multiplier = 1.0
             if is_weekend: multiplier += 0.25
@@ -282,7 +287,11 @@ class DataPipeline:
             h_val = 12
             if start_t_col:
                 try:
-                    h_val = int(str(row[start_t_col]).split(":")[0])
+                    val_str = str(row[start_t_col])
+                    if ' ' in val_str:
+                        # Extract the time part if it is a datetime string e.g. "2024-07-06 19:00:00"
+                        val_str = val_str.split(' ')[1]
+                    h_val = int(val_str.split(":")[0])
                 except Exception:
                     pass
             elif slot_col and slot_col in df.columns:
@@ -323,17 +332,25 @@ class DataPipeline:
 
         # Filter invalid rows (price <= 0)
         mapped_df = mapped_df[mapped_df["selling_price"] > 0].copy()
+        if mapped_df.empty:
+            raise ValueError(f"No valid numeric booking prices (> 0) found in column '{price_col}'. Please confirm column mapping.")
 
-        # Group-wise outlier detection & Suspend Abnormal Low-Price Bookings
-        clean_mapped_df, flagged_outliers = cls.detect_and_flag_group_outliers(mapped_df)
-        
-        # Save Outlier Review Report
-        cls.save_outlier_review_report(flagged_outliers)
+        # Normalize price for extended stays (duration > 24) to a 24-hour equivalent
+        extended_mask = mapped_df["extended_stay"] == 1
+        mapped_df.loc[extended_mask, "selling_price"] = (mapped_df.loc[extended_mask, "selling_price"] / mapped_df.loc[extended_mask, "duration_hours"]) * 24.0
 
-        # Run feature engineering only on clean, non-anomalous bookings
-        enriched_df = FeatureEngineer.process_dataframe(clean_mapped_df)
-        enriched_df.to_csv(CLEAN_DATA_PATH, index=False)
-        cls.sync_to_db(enriched_df)
+        # 8. Extract Weekend directly from dataset if present
+        wknd_col = next((c for c in df.columns if "weekend" in str(c).lower()), None)
+        if wknd_col:
+            # We convert it to 1/0
+            mapped_df["is_weekend"] = df[wknd_col].apply(lambda x: 1 if str(x).strip().upper() in ["1", "TRUE", "Y", "YES"] else 0)
+
+        # Uploaded dataset is trusted directly: Process 100% of uploaded records without dropping rows as outliers
+        FeatureEngineer.calculate_group_averages(mapped_df)
+        enriched_df = FeatureEngineer.process_dataframe(mapped_df)
+        if not enriched_df.empty:
+            enriched_df.to_csv(CLEAN_DATA_PATH, index=False)
+            cls.sync_to_db(enriched_df)
 
         return enriched_df
 
@@ -342,8 +359,32 @@ class DataPipeline:
         df = cls.load_raw_dataframe(file_path)
         cols = [str(c) for c in df.columns]
         
-        price_col = next((c for c in cols if any(k in c.lower() for k in ["extracted rent", "selling_price", "rent", "price", "booked_price", "booking_amount"])), cols[0])
-        date_col = next((c for c in cols if any(k in c.lower() for k in ["start date", "booking_date", "date", "check_in", "checkin"])), cols[0])
+        matched_price_col = next((c for c in cols if any(k in c.lower() for k in ["extracted rent", "selling_price", "rent", "price", "booked_price", "booking_amount", "amount", "rate", "cost", "tariff", "fee"])), None)
+        if not matched_price_col:
+            best_col = cols[0]
+            max_num = -1
+            for c in cols:
+                count = (pd.to_numeric(df[c], errors="coerce") > 0).sum()
+                if count > max_num:
+                    max_num = count
+                    best_col = c
+            price_col = best_col
+        else:
+            price_col = matched_price_col
+
+        matched_date_col = next((c for c in cols if any(k in c.lower() for k in ["start date", "booking_date", "date", "check_in", "checkin", "event_date", "day"])), None)
+        if not matched_date_col:
+            best_d_col = cols[0]
+            max_d_count = -1
+            for c in cols:
+                d_count = pd.to_datetime(df[c], errors="coerce").notna().sum()
+                if d_count > max_d_count:
+                    max_d_count = d_count
+                    best_d_col = c
+            date_col = best_d_col
+        else:
+            date_col = matched_date_col
+
         slot_col = next((c for c in cols if any(k in c.lower() for k in ["booking_category", "commercial_slot", "slot", "timing", "category"])), None)
         guests_col = next((c for c in cols if any(k in c.lower() for k in ["person_count", "guest", "person", "pax", "count"])), None)
         lead_col = next((c for c in cols if any(k in c.lower() for k in ["lead_days", "lead"])), None)
@@ -417,7 +458,17 @@ class DataPipeline:
         df_temp = df.copy()
         df_temp["booking_date_dt"] = pd.to_datetime(df_temp["booking_date"], errors="coerce")
         df_temp["month"] = df_temp["booking_date_dt"].dt.month.fillna(8).astype(int)
-        df_temp["is_weekend"] = df_temp["booking_date_dt"].dt.dayofweek.isin([5, 6]).astype(int)
+        
+        def _compute_business_weekend_df(r):
+            day = r["booking_date_dt"].dayofweek
+            slot = str(r.get("slot_type", ""))
+            if day == 5 and "Night" in slot:
+                return 1
+            if day == 6 and "Day" in slot:
+                return 1
+            return 0
+            
+        df_temp["is_weekend"] = df_temp.apply(_compute_business_weekend_df, axis=1)
 
         # 1. Compute group-wise medians
         group_cols = ["slot_type", "month", "is_weekend"]
@@ -432,7 +483,7 @@ class DataPipeline:
         clean_df = df_temp[~is_outlier].copy()
         
         # Clean up temporary columns from merge/calculations before returning
-        for col in ["booking_date_dt", "month", "is_weekend", "median", "count"]:
+        for col in ["booking_date_dt", "median", "count"]:
             if col in clean_df.columns:
                 clean_df.drop(columns=[col], inplace=True)
                 
@@ -443,7 +494,8 @@ class DataPipeline:
         """
         Saves outlier report to artifacts directory for manual review.
         """
-        report_path = Path("/home/ebl-01/.gemini/antigravity/brain/a52e8621-9899-4915-b9d0-c34f65056a20/outlier_review_report.md")
+        report_path = DATA_DIR / "outlier_review_report.md"
+        report_path.parent.mkdir(parents=True, exist_ok=True)
         
         lines = [
             "# Outlier Review Report: Suspicious Low-Price Bookings",

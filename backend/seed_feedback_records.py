@@ -2,12 +2,13 @@ import sys
 from pathlib import Path
 sys.path.append(str(Path(__file__).parent))
 
-from app.database import SessionLocal
+from app.database import SessionLocal, Base, engine
 from app.models.db_models import OwnerFeedback
 from datetime import datetime, timedelta
 import random
 
 def seed_feedback():
+    Base.metadata.create_all(bind=engine)
     db = SessionLocal()
     # Clear existing feedback to make it clean
     db.query(OwnerFeedback).delete()
