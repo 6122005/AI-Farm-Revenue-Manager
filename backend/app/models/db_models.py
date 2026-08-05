@@ -71,7 +71,21 @@ class OwnerFeedback(Base):
     suggested_price = Column(Float)
     action = Column(String) # ACCEPT, OVERRIDE, REJECT
     override_price = Column(Float, nullable=True)
-    reason = Column(String, nullable=True)
+    status = Column(String) # OPEN, RESOLVED, REJECTED
+    created_at = Column(DateTime, default=datetime.utcnow)
+    resolved_at = Column(DateTime, nullable=True)
+
+class PredictionLog(Base):
+    __tablename__ = "prediction_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    booking_date = Column(String, index=True)
+    commercial_slot = Column(String)
+    person_count = Column(Integer)
+    lead_days = Column(Integer)
+    shadow_ml_price = Column(Float)
+    rag_median_price = Column(Float)
+    final_price = Column(Float)
     created_at = Column(DateTime, default=datetime.utcnow)
 
 class LeadDaysRule(Base):

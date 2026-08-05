@@ -331,8 +331,10 @@ class DataPipeline:
             raise ValueError(f"No valid numeric booking prices (> 0) found in column '{price_col}'. Please confirm column mapping.")
 
         # Normalize price for extended stays (duration > 24) to a 24-hour equivalent
-        extended_mask = mapped_df["extended_stay"] == 1
-        mapped_df.loc[extended_mask, "selling_price"] = (mapped_df.loc[extended_mask, "selling_price"] / mapped_df.loc[extended_mask, "duration_hours"]) * 24.0
+        extended_mask = mapped_df["duration_hours"] > 24
+        if extended_mask.any():
+            mapped_df["selling_price"] = mapped_df["selling_price"].astype(float)
+            mapped_df.loc[extended_mask, "selling_price"] = (mapped_df.loc[extended_mask, "selling_price"] / mapped_df.loc[extended_mask, "duration_hours"]) * 24.0
 
         # 8. Extract Weekend directly from dataset if present
         wknd_col = next((c for c in df.columns if "weekend" in str(c).lower()), None)

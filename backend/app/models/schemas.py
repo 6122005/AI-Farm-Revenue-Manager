@@ -157,6 +157,8 @@ class PredictionResponse(BaseModel):
     
     debug_audit: Optional[Dict[str, Any]] = None
     base_ml_price: Optional[float] = None
+    shadow_ml_price: Optional[float] = None
+    rag_median_price: Optional[float] = None
     business_adjustments: Optional[List[Dict[str, Any]]] = None
     pricing_source: Optional[str] = None
     final_price: Optional[float] = None

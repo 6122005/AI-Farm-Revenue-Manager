@@ -1,5 +1,32 @@
 [
   {
+    "version_id": "20260805_172534",
+    "champion_name": "XGBoost",
+    "promoted": false,
+    "metrics": {
+      "r2": 0.9625120858054683,
+      "mae": 361.6234206211419,
+      "rmse": 634.5321606186222,
+      "mape": 2.9602955845238323,
+      "prediction_interval_coverage": 89.81481481481481,
+      "validation_strategy": "TimeSeriesSplit(n_splits=5)",
+      "feature_importances": {
+        "competitor_diff": 0.419928640127182,
+        "competitor_price": 0.4108068645000458,
+        "rolling_price_mean_30": 0.08866550773382187,
+        "effective_daily_rate": 0.0394100695848465,
+        "is_local_vacation": 0.012356618419289589,
+        "month_guest_slot_avg": 0.003404325572773814,
+        "extended_stay": 0.002962822327390313,
+        "month_weekend_slot_avg": 0.002305704867467284,
+        "is_consecutive_holiday": 0.0021495893597602844,
+        "is_lead_4_7d": 0.0018816235242411494
+      }
+    },
+    "trained_at": "2026-08-05T17:25:55.647790",
+    "artifact_path": "/Users/darshankanani/AI-Farm-Revenue-Manager/backend/models_store/version_history/model_20260805_172534.joblib"
+  },
+  {
     "version_id": "20260805_145433",
     "champion_name": "XGBoost",
     "promoted": true,
@@ -423,32 +450,5 @@
     },
     "trained_at": "2026-08-04T13:38:43.354382",
     "artifact_path": "/Users/darshankanani/AI-Farm-Revenue-Manager/backend/models_store/version_history/model_20260804_133808.joblib"
-  },
-  {
-    "version_id": "20260804_122420",
-    "champion_name": "XGBoost",
-    "promoted": false,
-    "metrics": {
-      "r2": 0.9443850402372733,
-      "mae": 313.8239764733777,
-      "rmse": 617.8805500485778,
-      "mape": 12.219419902380361,
-      "prediction_interval_coverage": 89.92366412213741,
-      "validation_strategy": "TimeSeriesSplit(n_splits=5)",
-      "feature_importances": {
-        "rolling_price_mean_30": 0.3253253400325775,
-        "hierarchical_fallback_avg": 0.2588127851486206,
-        "effective_daily_rate": 0.06341180205345154,
-        "commercial_units": 0.04352859407663345,
-        "extended_stay": 0.034477878361940384,
-        "duration_hours": 0.030181240290403366,
-        "month_2": 0.02714795432984829,
-        "slot_utilization_ratio": 0.022080903872847557,
-        "month_weekend_slot_avg": 0.016446897760033607,
-        "month_7": 0.016254646703600883
-      }
-    },
-    "trained_at": "2026-08-04T12:24:58.236468",
-    "artifact_path": "/Users/darshankanani/AI-Farm-Revenue-Manager/backend/models_store/version_history/model_20260804_122420.joblib"
   }
 ]

@@ -13,6 +13,29 @@ async def get_price_prediction(req: PredictionRequest):
     """
     try:
         res = prediction_engine.predict(req.dict())
+        
+        # Log to Shadow DB
+        from app.database import SessionLocal
+        from app.models.db_models import PredictionLog
+        
+        db = SessionLocal()
+        try:
+            log_entry = PredictionLog(
+                booking_date=res.booking_date,
+                commercial_slot=res.commercial_slot,
+                person_count=res.person_count,
+                lead_days=res.lead_days,
+                shadow_ml_price=res.shadow_ml_price,
+                rag_median_price=res.rag_median_price,
+                final_price=res.recommended_price
+            )
+            db.add(log_entry)
+            db.commit()
+        except Exception as e:
+            print(f"Error logging prediction: {e}")
+        finally:
+            db.close()
+            
         return res
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Prediction error: {str(e)}")

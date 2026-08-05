@@ -60,7 +60,10 @@ class PredictionEngine:
         feature_cols = artifact["features"]
         cat_cols = artifact.get("categorical_features", [])
         
+        # 1. Base Features
         df = pd.DataFrame([features_dict])
+        hist_df = self.get_clean_data()
+        df = FeatureEngineer.process_dataframe(df, is_prediction=True, historical_df=hist_df)
         df["slot_norm"] = df["slot_type"].apply(slot_engine.normalize_commercial_slot) if "slot_type" in df.columns else slot_engine.normalize_commercial_slot(slot_type)
         
         for col in feature_cols:
@@ -146,6 +149,12 @@ class PredictionEngine:
         
         # RULE 8 & 11: PricingContext Object - One query to rule them all
         df_clean = self.get_clean_data()
+        
+        if "exclude_index" in req:
+            exclude_idx = req["exclude_index"]
+            if exclude_idx in df_clean.index:
+                df_clean = df_clean.drop(index=exclude_idx)
+                
         context = SimilarBookingRetriever.retrieve(req_dict, df_clean)
         
         # RULE 1: Golden Pipeline Order Enforced Here
@@ -461,6 +470,8 @@ class PredictionEngine:
             ml_weight_pct=0.0,
             historical_weight_pct=100.0,
             base_ml_price=ml_predicted,
+            shadow_ml_price=float(ml_predicted),
+            rag_median_price=float(rep_price),
             fallback_explainability=fallback_explain
         )
 
