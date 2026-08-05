@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.database import engine, Base
 from app.api import upload, predict, dashboard, feedback, config_api, model_routes
-from app.services.data_pipeline import DataPipeline, CLEAN_DATA_PATH
+from app.services.data_pipeline import DataPipeline
 from app.services.prediction_engine import prediction_engine
 
 # Initialize SQLite database tables
@@ -38,8 +38,8 @@ async def startup_event():
     Checks if user dataset exists; if so, loads champion model.
     By default remains blank until user uploads dataset file.
     """
-    if CLEAN_DATA_PATH.exists() and DataPipeline.has_user_data():
-        prediction_engine.load_champion_model()
+    if DataPipeline.has_user_data():
+        prediction_engine.reload_model()
 
 @app.get("/")
 async def root():

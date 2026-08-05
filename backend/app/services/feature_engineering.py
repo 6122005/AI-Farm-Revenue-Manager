@@ -1,9 +1,11 @@
 import pandas as pd
 import json
 import numpy as np
-from datetime import datetime, date
+import joblib
+import warnings
+from datetime import datetime, date, timedelta
 from pathlib import Path
-from typing import Dict, Any, List, Tuple
+from typing import Dict, Any, List, Tuple, Optional
 from app.config import DATA_DIR
 from app.services.slot_engine import slot_engine
 
@@ -676,21 +678,32 @@ class FeatureEngineer:
         if "is_weekend" in row and pd.notna(row["is_weekend"]):
             is_weekend = int(float(row["is_weekend"]))
         else:
-            # 2. Use learned weekend intelligence if not provided (e.g. future predictions)
-            wknd_intel = cls._load_weekend_intelligence()
-            key = f"{day_of_week}_{commercial_slot}"
-            if key in wknd_intel:
-                is_weekend = wknd_intel[key]
-            else:
-                # 3. Fallback logic if combination is completely unseen
-                is_weekend = 1 if day_of_week in [5, 6] else 0
+            is_weekend = 0
+            if day_of_week == 5 and "Night" in commercial_slot and start_dt.hour >= 17:
+                is_weekend = 1
+            elif day_of_week == 6 and "Day" in commercial_slot and 6 <= start_dt.hour <= 12:
+                is_weekend = 1
 
-        full_date_str = dt.strftime("%Y-%m-%d")
-        month_day = dt.strftime("%m-%d")
+        # Intelligent Festival Demand Window Engine
+        from app.services.festival_engine import festival_engine
+        
+        duration_hours = float(row.get("duration_hours", 24.0))
+        if 'Night' in commercial_slot:
+            start_hour = 18
+        else:
+            start_hour = 8
+            
+        check_in = dt.replace(hour=start_hour, minute=0, second=0, microsecond=0)
+        check_out = check_in + pd.Timedelta(hours=duration_hours)
+        
+        festival_features = festival_engine.detect_festivals(check_in, check_out)
+        
+        is_festival = festival_features["is_festival"]
+        festival_name = festival_features["festival_name"]
+        is_festival_eve = 1 if festival_features["days_before_festival"] == 1 else 0
+        days_before_festival = festival_features["days_before_festival"]
+        days_after_festival = festival_features["days_after_festival"]
 
-        festival_name = FESTIVALS.get(full_date_str) or FESTIVALS.get(month_day, "")
-        is_festival = 1 if festival_name else 0
-        is_festival_eve = 1 if (full_date_str in FESTIVAL_EVES or month_day in FESTIVAL_EVES) else 0
         is_vacation = 1 if month in [5, 12, 1] else 0
 
         # Season
@@ -740,25 +753,6 @@ class FeatureEngineer:
             lead_time_cat = "Advance"
         else:
             lead_time_cat = "Far Advance"
-
-        # Calculate Days Before & Days After Festival
-        days_before_festival = 7
-        days_after_festival = 7
-        try:
-            for offset in range(1, 8):
-                b_dt = (dt + pd.Timedelta(days=offset)).strftime("%Y-%m-%d")
-                b_md = (dt + pd.Timedelta(days=offset)).strftime("%m-%d")
-                if b_dt in FESTIVALS or b_md in FESTIVALS:
-                    days_before_festival = offset
-                    break
-            for offset in range(1, 8):
-                a_dt = (dt - pd.Timedelta(days=offset)).strftime("%Y-%m-%d")
-                a_md = (dt - pd.Timedelta(days=offset)).strftime("%m-%d")
-                if a_dt in FESTIVALS or a_md in FESTIVALS:
-                    days_after_festival = offset
-                    break
-        except Exception:
-            pass
 
         is_long_weekend = 1 if (is_weekend and (is_festival or is_festival_eve or is_vacation or days_before_festival <= 1 or days_after_festival <= 1)) else 0
         is_consecutive_holiday = 1 if (is_festival or is_festival_eve or days_before_festival == 1 or days_after_festival == 1) else 0
@@ -954,7 +948,7 @@ class FeatureEngineer:
         base_index += (booking_pace - 1.0) * 10.0
         demand_index = float(np.clip(base_index, 5.0, 100.0))
 
-        return {
+        features = {
             "booking_date": dt.strftime("%Y-%m-%d"),
             "month": month,
             "month_sin": month_sin,
@@ -966,6 +960,21 @@ class FeatureEngineer:
             "is_weekend": is_weekend,
             "is_festival": is_festival,
             "festival_name": festival_name,
+            
+            # Intelligent Festival Demand Window Engine Features
+            "festival_detected": festival_features["festival_detected"],
+            "festival_category": festival_features["festival_category"],
+            "festival_tier": festival_features["festival_tier"],
+            "festival_demand_level": festival_features["festival_demand_level"],
+            "festival_multiplier": festival_features["festival_multiplier"],
+            "festival_overlap_hours": festival_features["festival_overlap_hours"],
+            "festival_overlap_percentage": festival_features["festival_overlap_percentage"],
+            "festival_window_start": festival_features["festival_window_start"],
+            "festival_window_end": festival_features["festival_window_end"],
+            "is_peak_festival": festival_features["is_peak_festival"],
+            "multiple_festival_overlap": festival_features["multiple_festival_overlap"],
+            "highest_priority_festival": festival_features["highest_priority_festival"],
+            
             "is_festival_eve": is_festival_eve,
             "days_before_festival": days_before_festival,
             "days_after_festival": days_after_festival,
@@ -1067,6 +1076,8 @@ class FeatureEngineer:
             "winter_demand_ratio": winter_demand_ratio,
             "rain_impact_ratio": rain_impact_ratio
         }
+        
+        return features
 
     @classmethod
     def compute_loo_group_metrics(
@@ -1237,7 +1248,7 @@ class FeatureEngineer:
         
         combined_df["rain_bucket"] = np.where(combined_df["rain_probability"] > 30.0, 1, 0)
         
-        combined_df["festival_tier"] = np.where(combined_df["is_festival"] == 0, 0,
+        combined_df["festival_bucket"] = np.where(combined_df["is_festival"] == 0, 0,
                                        np.where(combined_df["festival_importance_score"] < 0.6, 1, 2))
                                        
         combined_df["season"] = np.where(combined_df["month"].isin([3, 4, 5]), "summer",
@@ -1275,16 +1286,16 @@ class FeatureEngineer:
         l4_mean, l4_count = cls.compute_loo_group_metrics(combined_df, ["slot_type", "month", "is_weekend", "guest_bucket"], "selling_price", is_prediction)
         
         # Level 3: Slot + Month + Weekend/Weekday + Guest Bucket + Festival Tier
-        l3_mean, l3_count = cls.compute_loo_group_metrics(combined_df, ["slot_type", "month", "is_weekend", "guest_bucket", "festival_tier"], "selling_price", is_prediction)
+        l3_mean, l3_count = cls.compute_loo_group_metrics(combined_df, ["slot_type", "month", "is_weekend", "guest_bucket", "festival_bucket"], "selling_price", is_prediction)
         
         # Level 2: Slot + Month + Weekend/Weekday + Guest Bucket + Festival Tier + Lead Time Bucket
         l2_mean, l2_count = cls.compute_loo_group_metrics(
-            combined_df, ["slot_type", "month", "is_weekend", "guest_bucket", "festival_tier", "lead_bucket"], "selling_price", is_prediction
+            combined_df, ["slot_type", "month", "is_weekend", "guest_bucket", "festival_bucket", "lead_bucket"], "selling_price", is_prediction
         )
         
         # Level 1: Slot + Month + Weekend/Weekday + Guest Bucket + Festival Tier + Lead Time Bucket + Weather Pattern
         l1_mean, l1_count = cls.compute_loo_group_metrics(
-            combined_df, ["slot_type", "month", "is_weekend", "guest_bucket", "festival_tier", "lead_bucket", "rain_bucket"], "selling_price", is_prediction
+            combined_df, ["slot_type", "month", "is_weekend", "guest_bucket", "festival_bucket", "lead_bucket", "rain_bucket"], "selling_price", is_prediction
         )
         
         # Traversing the matching chain for hierarchical fallback mean (min_samples = 3)
@@ -1345,6 +1356,6 @@ class FeatureEngineer:
         combined_df["month_weather_slot_avg"] = np.where(m_w_count > 0, m_w_mean, combined_df["month_slot_avg"].values)
         
         # Drop temporary LOO / bucket columns to keep dataset clean
-        combined_df.drop(columns=["guest_bucket", "lead_bucket", "rain_bucket", "festival_tier", "season_monsoon", "season_summer", "season_winter"], inplace=True)
+        combined_df.drop(columns=["guest_bucket", "lead_bucket", "rain_bucket", "festival_bucket", "season_monsoon", "season_summer", "season_winter"], inplace=True)
         
         return combined_df

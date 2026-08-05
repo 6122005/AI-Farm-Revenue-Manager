@@ -75,7 +75,7 @@ class ExplainableAI:
             "factor": "Base Market Price",
             "impact_pct": 0.0,
             "impact_amount": float(round(derived_base_price, -2)),
-            "description": "Historical slot base price under standard baseline conditions (learned from data)."
+            "description": "Direct Historical Average based on Month, Slot, and Weekday/Weekend."
         })
 
         # Helper to format description and add factor if attribution is significant

@@ -11,9 +11,9 @@ from app.database import SessionLocal
 from app.models.db_models import BookingRecord
 
 if os.environ.get("TESTING") == "1":
-    CLEAN_DATA_PATH = DATA_DIR / "clean_booking_data_test.csv"
+    pass
 else:
-    CLEAN_DATA_PATH = DATA_DIR / "clean_booking_data.csv"
+    pass
 
 SAMPLE_EXCEL_PATH = DATA_DIR / "Farm_Booking_Data.xlsx"
 
@@ -22,24 +22,16 @@ class DataPipeline:
     def has_user_data() -> bool:
         """
         Checks if a user dataset file exists and has records.
-        Automatically cleans and loads from the reference Farm_Booking_Data.xlsx if it exists.
         """
-        ref_xlsx = DATA_DIR / "Farm_Booking_Data.xlsx"
+        ref_xlsx = DATA_DIR / "Farm_Booking_Data_new.xlsx"
         if ref_xlsx.exists() and os.environ.get("TESTING") != "1":
-            try:
-                # If clean file is missing or empty, restore from the reference spreadsheet
-                if not CLEAN_DATA_PATH.exists() or CLEAN_DATA_PATH.stat().st_size == 0:
-                    enriched = DataPipeline.load_and_process_file(ref_xlsx)
-                    return not enriched.empty
-            except Exception:
-                pass
-
-        if CLEAN_DATA_PATH.exists():
-            try:
-                df = pd.read_csv(CLEAN_DATA_PATH)
-                return not df.empty
-            except Exception:
-                return False
+            return True
+        
+        # Fallback to old name if needed
+        old_xlsx = DATA_DIR / "Farm_Booking_Data.xlsx"
+        if old_xlsx.exists():
+            return True
+            
         return False
 
     @staticmethod
@@ -85,10 +77,11 @@ class DataPipeline:
 
             month = dt.month
             day_of_week = dt.weekday()
+            hour = dt.hour
             is_weekend = 0
-            if day_of_week == 5 and "Night" in slot:
+            if day_of_week == 5 and "Night" in slot and hour >= 17:
                 is_weekend = 1
-            elif day_of_week == 6 and "Day" in slot:
+            elif day_of_week == 6 and "Day" in slot and 6 <= hour <= 12:
                 is_weekend = 1
 
             multiplier = 1.0
@@ -301,7 +294,9 @@ class DataPipeline:
             # Step 2 Rule Classification
             is_daytime = (6 <= h_val < 18)
             # Duration condition: <= 13 is 12H, else 24H
-            if d_val <= 13:
+            if d_val > 24:
+                inferred_slots.append("24H Night")
+            elif d_val <= 13:
                 inferred_slots.append("12H Day" if is_daytime else "12H Night")
             else:
                 inferred_slots.append("24H Day" if is_daytime else "24H Night")
@@ -349,7 +344,6 @@ class DataPipeline:
         FeatureEngineer.calculate_group_averages(mapped_df)
         enriched_df = FeatureEngineer.process_dataframe(mapped_df)
         if not enriched_df.empty:
-            enriched_df.to_csv(CLEAN_DATA_PATH, index=False)
             cls.sync_to_db(enriched_df)
 
         return enriched_df

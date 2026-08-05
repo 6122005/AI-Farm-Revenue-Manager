@@ -1,7 +1,7 @@
 from fastapi import APIRouter
 import pandas as pd
 import numpy as np
-from app.services.data_pipeline import DataPipeline, CLEAN_DATA_PATH
+from app.services.data_pipeline import DataPipeline
 from app.services.prediction_engine import prediction_engine
 from app.models.db_models import ModelRunMetric
 from app.database import SessionLocal
@@ -35,7 +35,9 @@ def get_dashboard_summary():
         }
 
     try:
-        df = pd.read_csv(CLEAN_DATA_PATH)
+        df = prediction_engine.get_clean_data()
+        if df.empty:
+            raise ValueError("No data")
     except Exception:
         return {
             "has_data": False,

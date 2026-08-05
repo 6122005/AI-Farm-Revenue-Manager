@@ -5,7 +5,7 @@ import pandas as pd
 from app.models.schemas import RollbackRequest
 from app.services.ml_trainer import MLTrainer
 from app.services.drift_detector import drift_detector
-from app.services.data_pipeline import CLEAN_DATA_PATH
+from app.services.prediction_engine import prediction_engine
 
 router = APIRouter(prefix="/api/models", tags=["Model Management & Version Registry"])
 
@@ -42,14 +42,10 @@ async def get_data_drift_report():
     """
     Evaluates dataset drift between reference clean booking data and current distribution.
     """
-    if not CLEAN_DATA_PATH.exists():
-        return {
-            "status": "no_data",
-            "message": "No historical clean dataset found."
-        }
-
     try:
-        df = pd.read_csv(CLEAN_DATA_PATH)
+        df = prediction_engine.get_clean_data()
+        if df.empty:
+            raise ValueError("No data")
         report = drift_detector.detect_drift(df, df)
         return {
             "status": "success",

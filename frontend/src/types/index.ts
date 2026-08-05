@@ -87,6 +87,9 @@ export interface PredictionResponse {
   competitor_diff?: number;
   weather: WeatherForecast;
   price_factors: PriceFactor[];
+  historical_guest_rate?: number;
+  historical_anchor_guests?: number;
+  original_requested_guests?: number;
   similar_bookings: SimilarBooking[];
   champion_model: string;
   model_path_used?: string;

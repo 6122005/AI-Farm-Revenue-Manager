@@ -134,10 +134,15 @@ class PredictionResponse(BaseModel):
     multi_slot_consistency: Optional[MultiSlotConsistency] = None
     drift_status: Optional[Dict[str, Any]] = None
     
+    debug_audit: Optional[Dict[str, Any]] = None
     base_ml_price: Optional[float] = None
     business_adjustments: Optional[List[Dict[str, Any]]] = None
     pricing_source: Optional[str] = None
     final_price: Optional[float] = None
+    
+    historical_guest_rate: Optional[float] = None
+    historical_anchor_guests: Optional[int] = None
+    original_requested_guests: Optional[int] = None
 
 class RollbackRequest(BaseModel):
     version_id: str = Field(..., description="Timestamp version ID to rollback to")

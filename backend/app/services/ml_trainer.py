@@ -59,19 +59,17 @@ NUMERICAL_COLS = [
     "festival_importance_score", "lead_time_demand_curve",
     "current_occupancy_pct", "remaining_inventory", "booking_pace", "occupancy_trend",
     "demand_index",
-    # Hierarchical data-driven averages & Independent Segment Statistics
-    "slot_month_weekend_ratio", "slot_month_weekend_diff", "segment_mean", "segment_median", 
-    "segment_trimmed_mean", "segment_weighted_median", "segment_std", 
-    "segment_count", "segment_confidence", "p25_price", "p75_price",
+    
+    # Context-Aware Segment Features
+    "segment_representative_price",
+    "segment_booking_count",
+    "segment_variance",
+    "segment_guest_increment",
+    "segment_lead_adjustment",
+    "segment_festival_adjustment",
+    "segment_similarity_score",
 
-
-    "hierarchical_fallback_avg",
-    "hierarchical_confidence_score",
-    "hierarchical_matched_level",
-    "month_slot_avg", "month_weekend_slot_avg", "month_guest_slot_avg", 
-    "month_festival_slot_avg", "month_leadtime_slot_avg", "month_weather_slot_avg",
     "month_sin", "month_cos"
-
 ]
 
 FEATURE_COLUMNS = BINARY_COLS + NUMERICAL_COLS

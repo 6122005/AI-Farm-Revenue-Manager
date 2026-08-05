@@ -9,7 +9,7 @@ from fastapi.responses import FileResponse
 
 from app.config import DATA_DIR, MODELS_DIR
 from app.models.schemas import ColumnMappingRequest, ValidationReportResponse
-from app.services.data_pipeline import DataPipeline, SAMPLE_EXCEL_PATH, CLEAN_DATA_PATH
+from app.services.data_pipeline import DataPipeline, SAMPLE_EXCEL_PATH
 from app.services.ml_trainer import MLTrainer, CHAMPION_MODEL_PATH
 from app.services.prediction_engine import prediction_engine
 
