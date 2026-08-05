@@ -3,37 +3,66 @@ import numpy as np
 from typing import Dict, Any, Tuple
 from app.services.feature_engineering import FeatureEngineer
 from app.services.pricing_context import PricingContext
+from app.services.slot_relationship_engine import slot_relationship_engine
 
 class SimilarBookingRetriever:
     
     @classmethod
-    def calculate_similarity_score(cls, request: Dict[str, Any], candidate: pd.Series) -> float:
-        score = 100.0
+    def get_slot_similarity(cls, req_slot: str, can_slot: str) -> float:
+        if req_slot == can_slot:
+            return 20.0
+        if "24H" in req_slot and "24H" in can_slot:
+            return 15.0
+        if "12H" in req_slot and "12H" in can_slot:
+            return 15.0
+        if ("Day" in req_slot and "Day" in can_slot) or ("Night" in req_slot and "Night" in can_slot):
+            return 10.0
+        return 5.0
         
-        # Exact month match is crucial
-        if request.get('month') != candidate.get('month'):
-            score -= 20.0
+    @classmethod
+    def calculate_similarity_score(cls, request: Dict[str, Any], candidate: pd.Series) -> float:
+        score = 0.0
+        
+        # Month: 30%
+        if request.get('month') == candidate.get('month'):
+            score += 30.0
             
-        # Same weekend/weekday is crucial
-        if request.get('is_weekend') != candidate.get('is_weekend'):
-            score -= 25.0
+        # Weekend/Weekday: 25%
+        if request.get('is_weekend') == candidate.get('is_weekend'):
+            score += 25.0
             
-        # Guest closeness
+        # Slot Similarity: 20%
+        score += cls.get_slot_similarity(request.get('commercial_slot', ''), candidate.get('commercial_slot', ''))
+            
+        # Festival Tier: 10%
+        req_fest = request.get('is_festival', 0)
+        can_fest = candidate.get('is_festival', 0)
+        if req_fest == can_fest:
+            score += 10.0
+            
+        # Season Match: 5%
+        req_season = slot_relationship_engine.get_season(request.get('month', 1))
+        can_season = slot_relationship_engine.get_season(candidate.get('month', 1))
+        if req_season == can_season:
+            score += 5.0
+            
+        # Guest Count: 5%
         req_guests = request.get('person_count', 4)
         can_guests = candidate.get('person_count', 4)
-        if req_guests != can_guests:
-            score -= abs(req_guests - can_guests) * 2.0
+        g_diff = abs(req_guests - can_guests)
+        if g_diff == 0: score += 5.0
+        elif g_diff <= 2: score += 3.0
+        elif g_diff <= 5: score += 1.0
             
-        # Lead time closeness (if inside the same bucket, it's good, otherwise penalty)
+        # Lead Time: 5%
         req_lead = request.get('lead_days', 0)
         can_lead = candidate.get('lead_days', 0)
-        lead_diff = abs(req_lead - can_lead)
-        if lead_diff > 14:
-            score -= 15.0
-        elif lead_diff > 7:
-            score -= 5.0
+        l_diff = abs(req_lead - can_lead)
+        if l_diff <= 7: score += 5.0
+        elif l_diff <= 14: score += 3.0
+        elif l_diff <= 30: score += 1.0
             
-        return max(0.0, score)
+        return max(0.0, min(100.0, score))
         
     @classmethod
     def calculate_representative_price(cls, df_subset: pd.DataFrame) -> Dict[str, Any]:
@@ -77,122 +106,116 @@ class SimilarBookingRetriever:
         req_slot = req.get('commercial_slot', '12H Day')
         req_month = req.get('month', 1)
         req_weekend = req.get('is_weekend', 0)
-        req_season = req.get('season', 'winter')
-
-        # Base filter: Golden Rule (Never mix slots)
-        df_slot = df[df['commercial_slot'] == req_slot].copy()
-
-        insights = FeatureEngineer._load_insights()
-        wk_premium = insights.get("weekend_premium_ratio", 1.25)
-        sm_premium = insights.get("summer_demand_ratio", 1.20)
-        wt_premium = insights.get("winter_demand_ratio", 1.00)
-        
-        season_multiplier = 1.0
-        if req_season == "Summer": season_multiplier = sm_premium
-        elif req_season == "Winter": season_multiplier = wt_premium
+        req_season = slot_relationship_engine.get_season(req_month)
 
         candidates = pd.DataFrame()
         level_used = 0
         borrowing_metadata = None
         
-        if not df_slot.empty:
-            # Level 1: Same Month + Same Slot + Same Weekend
-            l1 = df_slot[
-                (df_slot['month'] == req_month) &
-                (df_slot['is_weekend'] == req_weekend)
-            ]
-            if len(l1) >= 2: candidates, level_used = l1, 1
+        def find_closest_slot_data(pool_df, t_month):
+            if pool_df.empty: return pd.DataFrame(), None
+            # Find the best slot to borrow from
+            # We score available slots based on slot_similarity
+            unique_slots = pool_df['commercial_slot'].unique()
+            best_slot = None
+            best_sim = -1
+            for s in unique_slots:
+                sim = cls.get_slot_similarity(req_slot, s)
+                if sim > best_sim:
+                    best_sim = sim
+                    best_slot = s
+            if not best_slot: return pd.DataFrame(), None
             
-            # Level 2: Same Month + Opposite Weekend (Learn Ratio)
-            if candidates.empty:
-                l2 = df_slot[
-                    (df_slot['month'] == req_month) &
-                    (df_slot['is_weekend'] != req_weekend)
-                ].copy()
-                if len(l2) >= 2:
-                    multiplier = wk_premium if req_weekend == 1 else (1.0 / wk_premium)
-                    l2['selling_price'] = l2['selling_price'] * multiplier
-                    candidates, level_used = l2, 2
-                    borrowing_metadata = {
-                        "borrowed_from": f"Same Month Opposite {'Weekday' if req_weekend else 'Weekend'}",
-                        "multiplier": multiplier,
-                        "reason": f"Base {'Weekday' if req_weekend else 'Weekend'} Price × Premium ({multiplier:.2f}x)"
-                    }
-                    
-            # Level 3: Adjacent Month + Same Weekend
-            if candidates.empty:
-                l3 = df_slot[
-                    ((df_slot['month'].between(req_month - 1, req_month + 1)) | 
-                     ((req_month == 1) & (df_slot['month'] == 12)) | 
-                     ((req_month == 12) & (df_slot['month'] == 1))) &
-                    (df_slot['is_weekend'] == req_weekend)
-                ]
-                if len(l3) >= 2: candidates, level_used = l3, 3
+            ratio, source_level = slot_relationship_engine.get_conversion_ratio(req_slot, best_slot, t_month)
+            res_df = pool_df[pool_df['commercial_slot'] == best_slot].copy()
+            res_df['selling_price'] = res_df['selling_price'] * ratio
+            
+            meta = {
+                "borrowed_from": f"Slot Conversion: {best_slot} -> {req_slot}",
+                "multiplier": ratio,
+                "source_slot": best_slot,
+                "reason": f"Learned {source_level} conversion ratio ({ratio:.2f}x)"
+            }
+            return res_df, meta
+
+        # Level 1: Same Month + Same Weekend + Same Slot
+        l1 = df[(df['month'] == req_month) & (df['is_weekend'] == req_weekend) & (df['commercial_slot'] == req_slot)]
+        if len(l1) >= 2: candidates, level_used = l1, 1
+        
+        # Level 2: Same Month + Same Weekend + Closest Slot
+        if candidates.empty:
+            l2_pool = df[(df['month'] == req_month) & (df['is_weekend'] == req_weekend)]
+            cands, meta = find_closest_slot_data(l2_pool, req_month)
+            if len(cands) >= 2: candidates, level_used, borrowing_metadata = cands, 2, meta
                 
-            # Level 4: Same Season + Same Weekend
-            if candidates.empty:
-                l4 = df_slot[
-                    (df_slot['season'] == req_season) &
-                    (df_slot['is_weekend'] == req_weekend)
-                ]
-                if len(l4) >= 2: candidates, level_used = l4, 4
+        # Level 3: Same Season + Same Weekend + Same Slot
+        if candidates.empty:
+            l3 = df[(df['month'].apply(slot_relationship_engine.get_season) == req_season) & 
+                    (df['is_weekend'] == req_weekend) & 
+                    (df['commercial_slot'] == req_slot)]
+            if len(l3) >= 2: candidates, level_used = l3, 3
+            
+        # Level 4: Same Season + Same Weekend + Closest Slot
+        if candidates.empty:
+            l4_pool = df[(df['month'].apply(slot_relationship_engine.get_season) == req_season) & 
+                         (df['is_weekend'] == req_weekend)]
+            cands, meta = find_closest_slot_data(l4_pool, req_month)
+            if len(cands) >= 2: candidates, level_used, borrowing_metadata = cands, 4, meta
                 
-            # Level 5: Entire Year + Same Weekend
-            if candidates.empty:
-                l5 = df_slot[df_slot['is_weekend'] == req_weekend].copy()
-                if len(l5) >= 2:
-                    l5['selling_price'] = l5['selling_price'] * season_multiplier
-                    candidates, level_used = l5, 5
-                    borrowing_metadata = {
-                        "borrowed_from": f"All Year Same {'Weekend' if req_weekend else 'Weekday'}",
-                        "multiplier": season_multiplier,
-                        "reason": f"Yearly Base Price × Season Premium ({season_multiplier:.2f}x)"
-                    }
-                    
-            # Level 6: Entire Year + Opposite Weekend
-            if candidates.empty:
-                l6 = df_slot[df_slot['is_weekend'] != req_weekend].copy()
-                if len(l6) >= 2:
-                    wk_multiplier = wk_premium if req_weekend == 1 else (1.0 / wk_premium)
-                    total_multiplier = season_multiplier * wk_multiplier
-                    l6['selling_price'] = l6['selling_price'] * total_multiplier
-                    candidates, level_used = l6, 6
-                    borrowing_metadata = {
-                        "borrowed_from": f"All Year Opposite {'Weekday' if req_weekend else 'Weekend'}",
-                        "multiplier": total_multiplier,
-                        "reason": f"Yearly Base Price × Season & Weekend Premium ({total_multiplier:.2f}x)"
-                    }
+        # Level 5: Entire Year + Closest Slot (Prefer same weekend first, then any)
+        if candidates.empty:
+            l5_pool = df[df['is_weekend'] == req_weekend]
+            if len(l5_pool) < 2:
+                l5_pool = df # Absolute fallback
+            cands, meta = find_closest_slot_data(l5_pool, req_month)
+            if len(cands) >= 2: candidates, level_used, borrowing_metadata = cands, 5, meta
 
         if candidates.empty:
             borrowing_metadata = {
-                "borrowed_from": "Global Default",
+                "borrowed_from": "Pure ML Engine",
                 "multiplier": 1.0,
-                "reason": "Absolute Fallback (No Slot Data)"
+                "source_slot": "None",
+                "reason": "Absolute Fallback (No sufficient data found)"
             }
-            stats = {"level_used": 7, "borrowing_metadata": borrowing_metadata, "representative_price": 8500.0, "confidence": 0.0}
+            stats = {"level_used": 6, "borrowing_metadata": borrowing_metadata, "representative_price": 8500.0, "confidence": 0.0}
             return PricingContext(req, pd.DataFrame(), stats)
             
         # Score candidates
         candidates['similarity_score'] = candidates.apply(lambda row: cls.calculate_similarity_score(req, row), axis=1)
         candidates = candidates.sort_values('similarity_score', ascending=False)
         
-        # We cap at 20 most similar bookings within the segment to avoid smoothing out local variance
+        # Cap at 20 most similar bookings
         top_20 = candidates.head(20).copy()
         
         stats = cls.calculate_representative_price(top_20)
         stats['representative_price'] = stats.get('trimmed_mean', stats.get('median', 8500.0))
         stats['level_used'] = level_used
         
-        # Rule 7: Low Reliability should only appear if less than 2 usable bookings exist after every borrowing level.
-        if len(top_20) >= 2:
-            if level_used <= 2: stats['confidence'] = 95.0
-            elif level_used == 3: stats['confidence'] = 85.0
-            elif level_used == 4: stats['confidence'] = 75.0
-            elif level_used == 5: stats['confidence'] = 65.0
-            elif level_used == 6: stats['confidence'] = 55.0
-        else:
-            stats['confidence'] = 0.0
+        # Dynamic Confidence Score Redesign
+        base_conf = 100.0
+        
+        # 1. Fallback Distance Penalty
+        level_penalty = (level_used - 1) * 12.0
+        base_conf -= level_penalty
+        
+        # 2. Sample Size Penalty
+        sample_size = len(top_20)
+        if sample_size < 10:
+            base_conf -= (10 - sample_size) * 2.5
             
+        # 3. Prediction Stability (CV Penalty)
+        if sample_size > 1:
+            mean_val = top_20['selling_price'].mean()
+            std_val = top_20['selling_price'].std()
+            if mean_val > 0:
+                cv = std_val / mean_val
+                if cv > 0.1:
+                    cv_penalty = min(25.0, (cv - 0.1) * 100.0)
+                    base_conf -= cv_penalty
+                    
+        # Clamp between 10% and 99.9%
+        stats['confidence'] = round(max(10.0, min(99.9, base_conf)), 1)
+
         if borrowing_metadata:
             stats['borrowing_metadata'] = borrowing_metadata
             

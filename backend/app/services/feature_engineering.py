@@ -510,6 +510,20 @@ class FeatureEngineer:
                     key = f"slot_month_weekend_ratio_{s_key}_{m_code}"
                     avg_dict[key] = ratio
 
+            # Learned Commercial Ratio Engine (24H vs 12H)
+            gp_slot = df.groupby(["month", "is_weekend", "is_festival", "commercial_slot"])["base_selling_price"].median().reset_index()
+            # We need to map 24H -> 12H equivalents
+            for (m_c, w_c, f_c), group in gp_slot.groupby(["month", "is_weekend", "is_festival"]):
+                prices = {row["commercial_slot"]: row["base_selling_price"] for _, row in group.iterrows()}
+                
+                # Check pairs (e.g. 24H Day -> 12H Day, 24H Night -> 12H Night)
+                for c_slot, c_price in prices.items():
+                    if "24H" in c_slot:
+                        eq_12h = c_slot.replace("24H", "12H")
+                        if eq_12h in prices and prices[eq_12h] > 0:
+                            ratio = round(c_price / prices[eq_12h], 3)
+                            avg_dict[f"learned_ratio_24_12_{c_slot}_{int(m_c)}_{int(w_c)}_{int(f_c)}"] = ratio
+
 
             # Independent Segment Statistics (mean, median, std, count, confidence, p25, p75)
             gp_stats = df.groupby(["commercial_slot", "month", "is_weekend"])["base_selling_price"].agg(

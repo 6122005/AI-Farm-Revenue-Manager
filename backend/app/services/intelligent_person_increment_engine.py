@@ -8,8 +8,8 @@ class IntelligentPersonIncrementEngine:
     @classmethod
     def calculate_guest_increment(cls, context: PricingContext) -> Dict[str, Any]:
         """
-        Rule 4: Person Increment Engine V2
-        Uses exact nearest lower and upper historical data from the SAME segment pool.
+        Enterprise Person Increment Engine
+        Features: Adaptive Neighbor Search, Additive-Only Scaling
         """
         req_guests = context.request.get("person_count", 4)
         df = context.retrieved_segment
@@ -22,88 +22,53 @@ class IntelligentPersonIncrementEngine:
                 "evidence": {}
             }
             
-        # Group by person count to get medians for this specific segment
-        guest_medians = df.groupby('person_count')['selling_price'].median().to_dict()
+        # 1. Calculate global segment slope (per person cost)
+        x = df['person_count'].values
+        y = df['selling_price'].values
+        if len(df) >= 3 and len(np.unique(x)) > 1:
+            try:
+                slope, _ = np.polyfit(x, y, 1)
+                slope = max(0.0, slope) # strictly non-negative
+            except:
+                slope = 150.0
+        else:
+            slope = 150.0
+            
+        # 2. Adaptive Neighbor Search
+        radius = 0
+        max_radius = 5
+        target_records = pd.DataFrame()
         
-        if req_guests in guest_medians:
-            diff = guest_medians[req_guests] - base_price
-            return {
-                "adjustment_amount": float(diff),
-                "reason": f"Exact historical match for {req_guests} guests yields a segment difference of ₹{diff:.0f}.",
-                "evidence": {"exact_match": True, "lower": req_guests, "upper": req_guests}
-            }
+        while radius <= max_radius:
+            lower_bound = req_guests - radius
+            upper_bound = req_guests + radius
+            target_records = df[(df['person_count'] >= lower_bound) & (df['person_count'] <= upper_bound)]
+            if len(target_records) >= 8:
+                break
+            radius += 1
             
-        available_guests = sorted(list(guest_medians.keys()))
-        lower_guests = [g for g in available_guests if g < req_guests]
-        upper_guests = [g for g in available_guests if g > req_guests]
+        if target_records.empty:
+            target_records = df
+            
+        anchor_guests = target_records['person_count'].mean()
+        anchor_price = target_records['selling_price'].median()
         
-        nearest_lower = max(lower_guests) if lower_guests else None
-        nearest_upper = min(upper_guests) if upper_guests else None
+        # 3. Calculate Theoretical Price for exactly req_guests
+        theoretical_price = anchor_price + slope * (req_guests - anchor_guests)
         
-        # If we have both, interpolate
-        if nearest_lower is not None and nearest_upper is not None:
-            price_lower = guest_medians[nearest_lower]
-            price_upper = guest_medians[nearest_upper]
-            guest_diff = nearest_upper - nearest_lower
-            price_diff = price_upper - price_lower
-            
-            if guest_diff == 0:
-                per_person = 0.0
-            else:
-                per_person = max(0.0, price_diff / guest_diff)
-                
-            # We scale from the representative baseline, but to be safe and anchored:
-            # The representative baseline is our starting point.
-            # We should calculate the theoretical price for req_guests using the slope from the nearest lower.
-            theoretical_price = price_lower + (per_person * (req_guests - nearest_lower))
-            adj = theoretical_price - base_price
-            
-            return {
-                "adjustment_amount": float(adj),
-                "reason": f"Interpolated between {nearest_lower} and {nearest_upper} guests (Slope: ₹{per_person:.0f}/person). Total Adjustment: ₹{adj:.0f}.",
-                "evidence": {"lower_guests": nearest_lower, "upper_guests": nearest_upper, "slope": per_person}
-            }
-            
-        # If only lower exists, extrapolate upwards
-        if nearest_lower is not None:
-            # We need a slope. If there's another lower, use it. Otherwise, default to conservative 100/person.
-            if len(lower_guests) > 1:
-                second_lower = lower_guests[-2]
-                g_diff = nearest_lower - second_lower
-                p_diff = guest_medians[nearest_lower] - guest_medians[second_lower]
-                per_person = max(0.0, p_diff / g_diff) if g_diff > 0 else 100.0
-            else:
-                # Safe fallback if we can't build a historical slope
-                per_person = 150.0
-                
-            theoretical_price = guest_medians[nearest_lower] + (per_person * (req_guests - nearest_lower))
-            adj = theoretical_price - base_price
-            return {
-                "adjustment_amount": float(adj),
-                "reason": f"Extrapolated from {nearest_lower} guests upwards (Slope: ₹{per_person:.0f}/person). Total Adj: ₹{adj:.0f}.",
-                "evidence": {"lower_guests": nearest_lower, "upper_guests": None, "slope": per_person}
-            }
-            
-        # If only upper exists, extrapolate downwards
-        if nearest_upper is not None:
-            if len(upper_guests) > 1:
-                second_upper = upper_guests[1]
-                g_diff = second_upper - nearest_upper
-                p_diff = guest_medians[second_upper] - guest_medians[nearest_upper]
-                per_person = max(0.0, p_diff / g_diff) if g_diff > 0 else 100.0
-            else:
-                per_person = 150.0
-                
-            theoretical_price = guest_medians[nearest_upper] - (per_person * (nearest_upper - req_guests))
-            adj = theoretical_price - base_price
-            return {
-                "adjustment_amount": float(adj),
-                "reason": f"Extrapolated downwards from {nearest_upper} guests (Slope: ₹{per_person:.0f}/person). Total Adj: ₹{adj:.0f}.",
-                "evidence": {"lower_guests": None, "upper_guests": nearest_upper, "slope": per_person}
-            }
-            
+        # 4. Strict Additive Rule (Never subtract from Base Price)
+        raw_adj = theoretical_price - base_price
+        adj = float(max(0.0, raw_adj))
+        
         return {
-            "adjustment_amount": 0.0,
-            "reason": "Unexpected guest calculation failure.",
-            "evidence": {}
+            "adjustment_amount": adj,
+            "reason": f"Adaptive search (radius ±{min(radius, max_radius)}, {len(target_records)} records) yielded theoretical price ₹{theoretical_price:.0f}. Applied strict non-negative floor.",
+            "evidence": {
+                "search_radius": min(radius, max_radius),
+                "records_found": len(target_records),
+                "anchor_guests": float(anchor_guests),
+                "anchor_price": float(anchor_price),
+                "slope": float(slope),
+                "raw_adjustment": float(raw_adj)
+            }
         }

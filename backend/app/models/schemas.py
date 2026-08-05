@@ -97,8 +97,29 @@ class MultiSlotConsistency(BaseModel):
     slot_differentiation_verified: Optional[bool] = True
     reason: str
 
+class FallbackExplainability(BaseModel):
+    requested_combination: str
+    fallback_level_used: int
+    historical_records_used: int
+    conversion_ratio_used: float
+    historical_source_slot: str
+    final_predicted_price: float
+    confidence: float
+    reason_for_fallback: str
+
+class ValidationTrace(BaseModel):
+    total_raw_records: int
+    total_cleaned_records: int
+    dropped_records_count: int
+    dropped_reasons_summary: Dict[str, int]
+    fallback_distance: int
+    clean_records_used_for_base_price: int
+    clean_records_used_for_guest_increment: int
+
 class PredictionResponse(BaseModel):
-    recommended_price: float
+    recommended_price: float  # This will now map to revenue_optimized_price for backwards compatibility, or we can just add the new fields.
+    revenue_optimized_price: float
+    fair_market_price: float
     min_price: float
     max_price: float
     prediction_interval: Optional[Dict[str, float]] = None
@@ -143,6 +164,8 @@ class PredictionResponse(BaseModel):
     historical_guest_rate: Optional[float] = None
     historical_anchor_guests: Optional[int] = None
     original_requested_guests: Optional[int] = None
+    fallback_explainability: Optional[FallbackExplainability] = None
+    validation_trace: Optional[ValidationTrace] = None
 
 class RollbackRequest(BaseModel):
     version_id: str = Field(..., description="Timestamp version ID to rollback to")

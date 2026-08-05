@@ -340,9 +340,12 @@ class DataPipeline:
             # We convert it to 1/0
             mapped_df["is_weekend"] = df[wknd_col].apply(lambda x: 1 if str(x).strip().upper() in ["1", "TRUE", "Y", "YES"] else 0)
 
-        # Uploaded dataset is trusted directly: Process 100% of uploaded records without dropping rows as outliers
-        FeatureEngineer.calculate_group_averages(mapped_df)
-        enriched_df = FeatureEngineer.process_dataframe(mapped_df)
+        # Hierarchical Outlier Detection
+        clean_df, outliers_df = cls.detect_and_flag_group_outliers(mapped_df)
+        
+        # Only use the strictly cleaned data for feature engineering and training
+        FeatureEngineer.calculate_group_averages(clean_df)
+        enriched_df = FeatureEngineer.process_dataframe(clean_df)
         if not enriched_df.empty:
             cls.sync_to_db(enriched_df)
 
@@ -445,9 +448,8 @@ class DataPipeline:
     @classmethod
     def detect_and_flag_group_outliers(cls, df: pd.DataFrame):
         """
-        Detects abnormal low-price records within each Booking Category (slot_type),
-        Person Count, Month, and Weekend status.
-        Flags them as suspicious if they are <= 35% of the group median price.
+        Hierarchical Outlier Detection.
+        Calculates outlier_score dynamically based on fallback segments.
         """
         df_temp = df.copy()
         df_temp["booking_date_dt"] = pd.to_datetime(df_temp["booking_date"], errors="coerce")
@@ -464,23 +466,77 @@ class DataPipeline:
             
         df_temp["is_weekend"] = df_temp.apply(_compute_business_weekend_df, axis=1)
 
-        # 1. Compute group-wise medians
-        group_cols = ["slot_type", "month", "is_weekend"]
-        grouped = df_temp.groupby(group_cols)["selling_price"].agg(["median", "count"]).reset_index()
+        # Pre-compute segments
+        df_temp['segment_strict'] = df_temp['month'].astype(str) + "_" + df_temp['is_weekend'].astype(str) + "_" + df_temp['slot_type']
+        df_temp['segment_month_slot'] = df_temp['month'].astype(str) + "_" + df_temp['slot_type']
+        df_temp['segment_month'] = df_temp['month'].astype(str)
+        df_temp['segment_slot'] = df_temp['slot_type']
         
-        df_temp = df_temp.merge(grouped, on=group_cols, how="left")
+        outlier_scores = []
+        outlier_reasons = []
         
-        # 2. Flag anomalous records: price <= 35% of median AND median is reasonable (> 2000)
-        is_outlier = (df_temp["selling_price"] <= 0.35 * df_temp["median"]) & (df_temp["median"] > 2000.0)
-        
-        outliers_df = df_temp[is_outlier].copy()
-        clean_df = df_temp[~is_outlier].copy()
-        
-        # Clean up temporary columns from merge/calculations before returning
-        for col in ["booking_date_dt", "median", "count"]:
-            if col in clean_df.columns:
-                clean_df.drop(columns=[col], inplace=True)
+        for idx, row in df_temp.iterrows():
+            strict = df_temp[df_temp['segment_strict'] == row['segment_strict']]
+            m_slot = df_temp[df_temp['segment_month_slot'] == row['segment_month_slot']]
+            month = df_temp[df_temp['segment_month'] == row['segment_month']]
+            slot = df_temp[df_temp['segment_slot'] == row['segment_slot']]
+            
+            group = None
+            group_name = ""
+            if len(strict) >= 8: group, group_name = strict, "Strict"
+            elif len(m_slot) >= 8: group, group_name = m_slot, "Month+Slot"
+            elif len(month) >= 8: group, group_name = month, "Month"
+            elif len(slot) >= 8: group, group_name = slot, "Slot"
+            else: group, group_name = df_temp, "Global"
+            
+            prices = group['selling_price'].values
+            median = np.median(prices)
+            mad = np.median(np.abs(prices - median))
+            q1 = np.percentile(prices, 25)
+            q3 = np.percentile(prices, 75)
+            iqr = q3 - q1
+            p5 = np.percentile(prices, 5)
+            p95 = np.percentile(prices, 95)
+            
+            score = 0
+            reasons = []
+            price = row['selling_price']
+            
+            if mad > 0 and (price < median - 3*mad or price > median + 3*mad):
+                score += 1
+                reasons.append("MAD")
                 
+            if iqr > 0 and (price < q1 - 1.5*iqr or price > q3 + 1.5*iqr):
+                score += 1
+                reasons.append("IQR")
+                
+            if len(prices) >= 20 and (price <= p5 or price >= p95):
+                score += 1
+                reasons.append("Percentile")
+                
+            from app.config_manager import ConfigManager
+            min_floor = ConfigManager.get_rule('minimum_booking_price', 1500)
+            if price < min_floor:
+                score += 2 # Business floor violation
+                reasons.append("Business_Floor")
+                
+            outlier_scores.append(score)
+            outlier_reasons.append(", ".join(reasons) + f" ({group_name})")
+            
+        df_temp['outlier_score'] = outlier_scores
+        df_temp['outlier_reason'] = outlier_reasons
+        df_temp['is_global_outlier'] = df_temp['outlier_score'] >= 2
+        
+        # Clean up temporary columns
+        for col in ["booking_date_dt", "segment_strict", "segment_month_slot", "segment_month", "segment_slot"]:
+            if col in df_temp.columns:
+                df_temp.drop(columns=[col], inplace=True)
+                
+        outliers_df = df_temp[df_temp['is_global_outlier'] == True].copy()
+        clean_df = df_temp[df_temp['is_global_outlier'] == False].copy()
+        
+        # We also need to add is_global_outlier to clean_df (it's false) and outliers_df (it's true)
+        # So we can just return them. The caller uses `clean_df` to continue pipeline.
         return clean_df, outliers_df
 
     @classmethod
