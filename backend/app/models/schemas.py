@@ -56,6 +56,13 @@ class PredictionRequest(BaseModel):
     festival_name: Optional[str] = Field(None, description="Festival name")
     special_event_override: Optional[bool] = Field(False, description="Manual special event override")
 
+class OutcomeRequest(BaseModel):
+    prediction_id: int = Field(..., description="The ID of the PredictionLog entry")
+    actual_selling_price: float = Field(..., description="The final confirmed selling price")
+    booking_status: str = Field(..., description="Booked, Rejected, Negotiated")
+    negotiated_price: Optional[float] = Field(None, description="The negotiated price if applicable")
+    discount_given: Optional[float] = Field(None, description="The discount given if applicable")
+
 class PriceFactor(BaseModel):
     factor: str
     impact_pct: float
@@ -117,6 +124,7 @@ class ValidationTrace(BaseModel):
     clean_records_used_for_guest_increment: int
 
 class PredictionResponse(BaseModel):
+    prediction_id: Optional[int] = None
     recommended_price: float  # This will now map to revenue_optimized_price for backwards compatibility, or we can just add the new fields.
     revenue_optimized_price: float
     fair_market_price: float

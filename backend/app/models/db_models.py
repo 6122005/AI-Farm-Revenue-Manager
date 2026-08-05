@@ -79,13 +79,39 @@ class PredictionLog(Base):
     __tablename__ = "prediction_logs"
 
     id = Column(Integer, primary_key=True, index=True)
+    prediction_timestamp = Column(DateTime, default=datetime.utcnow)
     booking_date = Column(String, index=True)
+    booking_created_date = Column(String, nullable=True) # Mocked or inferred from lead days
+    arrival_date = Column(String, nullable=True)
+    month = Column(Integer)
+    is_weekend = Column(Boolean)
+    is_festival = Column(Boolean)
+    is_vacation = Column(Boolean)
     commercial_slot = Column(String)
     person_count = Column(Integer)
     lead_days = Column(Integer)
-    shadow_ml_price = Column(Float)
+    
     rag_median_price = Column(Float)
+    shadow_ml_price = Column(Float)
     final_price = Column(Float)
+    
+    actual_selling_price = Column(Float, nullable=True)
+    booking_status = Column(String, nullable=True) # Booked / Rejected / Negotiated
+    negotiated_price = Column(Float, nullable=True)
+    discount_given = Column(Float, nullable=True)
+    booking_time = Column(DateTime, nullable=True)
+    
+    model_version = Column(String, nullable=True)
+    feature_version = Column(String, nullable=True)
+    business_rules_version = Column(String, nullable=True)
+    
+    prediction_confidence = Column(Float, nullable=True)
+    
+    validation_status = Column(String, default="PENDING") # PENDING, VALIDATED
+    
+    abs_error_rag = Column(Float, nullable=True)
+    abs_error_ml = Column(Float, nullable=True)
+    winning_model = Column(String, nullable=True) # RAG or ML
     created_at = Column(DateTime, default=datetime.utcnow)
 
 class LeadDaysRule(Base):

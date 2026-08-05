@@ -1,12 +1,12 @@
 {
-  "highest_revenue_weekday": 2,
-  "highest_revenue_month": 7,
+  "highest_revenue_weekday": 5,
+  "highest_revenue_month": 5,
   "most_booked_slot": "24H Night",
   "least_booked_slot": "24H Day",
-  "weekend_premium_ratio": 1.333,
+  "weekend_premium_ratio": 1.992,
   "summer_demand_ratio": 1.2,
   "winter_demand_ratio": 1.067,
-  "rain_impact_ratio": 0.394,
-  "advance_booking_ratio": 2.38,
+  "rain_impact_ratio": 0.8,
+  "advance_booking_ratio": 1.57,
   "average_occupancy": 0.65
 }

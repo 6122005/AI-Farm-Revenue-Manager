@@ -1435,3 +1435,16 @@ class FeatureEngineer:
         combined_df.drop(columns=['booking_date_dt'], inplace=True, errors='ignore')
 
         return combined_df
+
+    @classmethod
+    def _load_festival_intelligence(cls) -> Dict[str, float]:
+        import json
+        from pathlib import Path
+        fest_path = Path("data/learned_festival_intelligence.json")
+        if fest_path.exists():
+            try:
+                with open(fest_path, "r") as f:
+                    return json.load(f)
+            except Exception:
+                pass
+        return {}
