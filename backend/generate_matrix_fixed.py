@@ -41,7 +41,7 @@ for m in months:
         req_wd = {
             "booking_date": wd_date,
             "commercial_slot": s,
-            "person_count": 4,
+            "person_count": 10,
             "duration_hours": dur,
             "lead_days": 10,
             "start_datetime": st_wd,
@@ -61,7 +61,7 @@ for m in months:
         req_we = {
             "booking_date": we_date,
             "commercial_slot": s,
-            "person_count": 4,
+            "person_count": 10,
             "duration_hours": dur,
             "lead_days": 10,
             "start_datetime": st_we,
