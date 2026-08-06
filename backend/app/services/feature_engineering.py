@@ -701,41 +701,75 @@ class FeatureEngineer:
         # Intelligent Festival Demand Window Engine
         from app.services.festival_engine import festival_engine
         
-        duration_hours = float(row.get("duration_hours", 24.0))
-        if 'Night' in commercial_slot:
-            start_hour = 18
+        if "is_festival" in row and pd.notna(row["is_festival"]):
+            is_festival = int(float(row["is_festival"]))
+            festival_name = row.get("festival_name", "Festival")
+            is_festival_eve = int(float(row.get("is_festival_eve", 0)))
+            days_before_festival = int(float(row.get("days_before_festival", 7)))
+            days_after_festival = int(float(row.get("days_after_festival", 7)))
+            festival_features = {
+                "festival_detected": bool(is_festival),
+                "festival_name": festival_name,
+                "festival_category": "Standard",
+                "festival_tier": "Tier 2",
+                "festival_demand_level": "High",
+                "festival_multiplier": 1.0,
+                "festival_overlap_hours": 0.0,
+                "festival_overlap_percentage": 0.0,
+                "festival_window_start": None,
+                "festival_window_end": None,
+                "days_before_festival": days_before_festival,
+                "days_after_festival": days_after_festival,
+                "is_peak_festival": False,
+                "multiple_festival_overlap": False,
+                "highest_priority_festival": festival_name,
+                "is_festival": is_festival
+            }
         else:
-            start_hour = 8
+            duration_hours = float(row.get("duration_hours", 24.0))
+            if 'Night' in commercial_slot:
+                start_hour = 18
+            else:
+                start_hour = 8
+                
+            check_in = dt.replace(hour=start_hour, minute=0, second=0, microsecond=0)
+            check_out = check_in + pd.Timedelta(hours=duration_hours)
             
-        check_in = dt.replace(hour=start_hour, minute=0, second=0, microsecond=0)
-        check_out = check_in + pd.Timedelta(hours=duration_hours)
-        
-        festival_features = festival_engine.detect_festivals(check_in, check_out)
-        
-        is_festival = festival_features["is_festival"]
-        festival_name = festival_features["festival_name"]
-        is_festival_eve = 1 if festival_features["days_before_festival"] == 1 else 0
-        days_before_festival = festival_features["days_before_festival"]
-        days_after_festival = festival_features["days_after_festival"]
+            festival_features = festival_engine.detect_festivals(check_in, check_out)
+            
+            is_festival = festival_features["is_festival"]
+            festival_name = festival_features["festival_name"]
+            is_festival_eve = 1 if festival_features["days_before_festival"] == 1 else 0
+            days_before_festival = festival_features["days_before_festival"]
+            days_after_festival = festival_features["days_after_festival"]
 
-        is_vacation = 1 if month in [5, 12, 1] else 0
+        if "is_vacation" in row and pd.notna(row["is_vacation"]):
+            is_vacation = int(float(row["is_vacation"]))
+        else:
+            is_vacation = 1 if month in [5, 12, 1] else 0
 
         # Season
-        if month in [6, 7, 8, 9]:
-            season = "Monsoon"
-            season_monsoon = 1
-            season_summer = 0
-            season_winter = 0
-        elif month in [3, 4, 5]:
-            season = "Summer"
-            season_monsoon = 0
-            season_summer = 1
-            season_winter = 0
+        if "season" in row and pd.notna(row["season"]):
+            season = str(row["season"]).strip().title()
+            season_monsoon = 1 if season == "Monsoon" else 0
+            season_summer = 1 if season == "Summer" else 0
+            season_winter = 1 if season == "Winter" else 0
         else:
-            season = "Winter"
-            season_monsoon = 0
-            season_summer = 0
-            season_winter = 1
+            if month in [6, 7, 8, 9]:
+                season = "Monsoon"
+                season_monsoon = 1
+                season_summer = 0
+                season_winter = 0
+            elif month in [3, 4, 5]:
+                season = "Summer"
+                season_monsoon = 0
+                season_summer = 1
+                season_winter = 0
+            else:
+                season = "Winter"
+                season_monsoon = 0
+                season_summer = 0
+                season_winter = 1
 
         # Summer (Mar-May) is Peak Season; Winter (Nov-Feb) is Off-Season
         is_peak_season = 1 if (is_weekend or is_festival or is_vacation or month in [3, 4, 5]) else 0

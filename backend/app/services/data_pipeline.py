@@ -214,7 +214,7 @@ class DataPipeline:
         """
         df = cls.load_raw_dataframe(file_path)
 
-        mapped_df = pd.DataFrame()
+        mapped_df = df.copy()
 
         # 1. Selling Price (CONFIRMED)
         if price_col not in df.columns:
@@ -276,6 +276,11 @@ class DataPipeline:
         start_t_col = next((c for c in df.columns if "start time" in str(c).lower() or "checkin_time" in str(c).lower()), None)
         inferred_slots = []
         for idx, row in df.iterrows():
+            # Slot Classification (Trust Excel if present)
+            if slot_col and slot_col in df.columns and not pd.isna(row.get(slot_col)) and str(row.get(slot_col)).strip() != "":
+                inferred_slots.append(str(row[slot_col]).strip())
+                continue
+                
             d_val = float(mapped_df.loc[idx, "duration_hours"])
             h_val = 12
             if start_t_col:
@@ -330,17 +335,31 @@ class DataPipeline:
         if mapped_df.empty:
             raise ValueError(f"No valid numeric booking prices (> 0) found in column '{price_col}'. Please confirm column mapping.")
 
-        # Normalize price for extended stays (duration > 24) to a 24-hour equivalent
-        extended_mask = mapped_df["duration_hours"] > 24
-        if extended_mask.any():
-            mapped_df["selling_price"] = mapped_df["selling_price"].astype(float)
-            mapped_df.loc[extended_mask, "selling_price"] = (mapped_df.loc[extended_mask, "selling_price"] / mapped_df.loc[extended_mask, "duration_hours"]) * 24.0
+        # Normalize price for extended stays (duration > 24) is REMOVED to preserve Exact Excel Rate.
+        # extended_mask = mapped_df["duration_hours"] > 24
+        # if extended_mask.any():
+        #     mapped_df["selling_price"] = mapped_df["selling_price"].astype(float)
+        #     mapped_df.loc[extended_mask, "selling_price"] = (mapped_df.loc[extended_mask, "selling_price"] / mapped_df.loc[extended_mask, "duration_hours"]) * 24.0
 
         # 8. Extract Weekend directly from dataset if present
         wknd_col = next((c for c in df.columns if "weekend" in str(c).lower()), None)
         if wknd_col:
-            # We convert it to 1/0
             mapped_df["is_weekend"] = df[wknd_col].apply(lambda x: 1 if str(x).strip().upper() in ["1", "TRUE", "Y", "YES"] else 0)
+
+        # 9. Extract Festival directly if present
+        fest_col = next((c for c in df.columns if "festival" in str(c).lower()), None)
+        if fest_col:
+            mapped_df["is_festival"] = df[fest_col].apply(lambda x: 1 if str(x).strip().upper() in ["1", "TRUE", "Y", "YES"] else 0)
+            
+        # 10. Extract Season directly if present
+        season_col = next((c for c in df.columns if "season" in str(c).lower()), None)
+        if season_col:
+            mapped_df["season"] = df[season_col].astype(str).str.strip().str.title()
+            
+        # 11. Extract Vacation directly if present
+        vacation_col = next((c for c in df.columns if "vacation" in str(c).lower()), None)
+        if vacation_col:
+            mapped_df["is_vacation"] = df[vacation_col].apply(lambda x: 1 if str(x).strip().upper() in ["1", "TRUE", "Y", "YES"] else 0)
 
         # Hierarchical Outlier Detection
         clean_df, outliers_df = cls.detect_and_flag_group_outliers(mapped_df)
@@ -457,16 +476,17 @@ class DataPipeline:
         df_temp["booking_date_dt"] = pd.to_datetime(df_temp["booking_date"], errors="coerce")
         df_temp["month"] = df_temp["booking_date_dt"].dt.month.fillna(8).astype(int)
         
-        def _compute_business_weekend_df(r):
-            day = r["booking_date_dt"].dayofweek
-            slot = str(r.get("slot_type", ""))
-            if day == 5 and "Night" in slot:
-                return 1
-            if day == 6 and "Day" in slot:
-                return 1
-            return 0
-            
-        df_temp["is_weekend"] = df_temp.apply(_compute_business_weekend_df, axis=1)
+        if "is_weekend" not in df_temp.columns:
+            def _compute_business_weekend_df(r):
+                day = r["booking_date_dt"].dayofweek
+                slot = str(r.get("slot_type", ""))
+                if day == 5 and "Night" in slot:
+                    return 1
+                if day == 6 and "Day" in slot:
+                    return 1
+                return 0
+                
+            df_temp["is_weekend"] = df_temp.apply(_compute_business_weekend_df, axis=1)
 
         # Pre-compute segments
         df_temp['segment_strict'] = df_temp['month'].astype(str) + "_" + df_temp['is_weekend'].astype(str) + "_" + df_temp['slot_type']
@@ -535,7 +555,9 @@ class DataPipeline:
                 df_temp.drop(columns=[col], inplace=True)
                 
         outliers_df = df_temp[df_temp['is_global_outlier'] == True].copy()
-        clean_df = df_temp[df_temp['is_global_outlier'] == False].copy()
+        
+        # BUSINESS RULE: Preserve all valid business rows. Do NOT delete statistical outliers.
+        clean_df = df_temp.copy()
         
         # We also need to add is_global_outlier to clean_df (it's false) and outliers_df (it's true)
         # So we can just return them. The caller uses `clean_df` to continue pipeline.

@@ -232,7 +232,7 @@ class PredictionEngine:
         # 9.5 Multi-Slot Consistency Guardrail (24H >= 12H)
         consistency_adj = 0.0
         consistency_reason = ""
-        skip_consistency = req.get("skip_consistency_check", False)
+        skip_consistency = True # Rule disabled per user request
         if not skip_consistency and "24H" in commercial_slot:
             eq_12h_slot = commercial_slot.replace("24H", "12H")
             req_12h = req.copy()
