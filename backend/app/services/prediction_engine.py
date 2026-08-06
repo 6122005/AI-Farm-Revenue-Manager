@@ -171,8 +171,10 @@ class PredictionEngine:
         # 4. Lead Adjustment
         lead_adj = HistoricalAdjustments.calculate_lead_days_adjustment(context)
         
-        # 5. Festival Adjustment (Disabled per user request)
-        fest_adj = {"adjustment_amount": 0.0, "reason": "Festival premium disabled by user."}
+        # 5. Festival Adjustment (New Manual Excel Engine)
+        from app.services.manual_festival_engine import ManualFestivalEngine
+        booking_date_str = start_dt.strftime("%Y-%m-%d")
+        fest_adj = ManualFestivalEngine.calculate_premium(booking_date_str, rep_price)
         
         # 6. Demand Adjustment (Disabled per user request)
         demand_adj = {"adjustment_amount": 0.0, "reason": "Demand premium disabled by user."}
