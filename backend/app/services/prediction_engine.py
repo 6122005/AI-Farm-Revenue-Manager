@@ -171,14 +171,14 @@ class PredictionEngine:
         # 4. Lead Adjustment
         lead_adj = HistoricalAdjustments.calculate_lead_days_adjustment(context)
         
-        # 5. Festival Adjustment
-        fest_adj = HistoricalAdjustments.calculate_festival_premium(context)
+        # 5. Festival Adjustment (Disabled per user request)
+        fest_adj = {"adjustment_amount": 0.0, "reason": "Festival premium disabled by user."}
         
-        # 6. Demand Adjustment
-        demand_adj = HistoricalAdjustments.calculate_demand_adjustment(context)
+        # 6. Demand Adjustment (Disabled per user request)
+        demand_adj = {"adjustment_amount": 0.0, "reason": "Demand premium disabled by user."}
         
-        # 7. Weather Adjustment
-        weather_adj = HistoricalAdjustments.calculate_weather_adjustment(context)
+        # 7. Weather Adjustment (Disabled per user request)
+        weather_adj = {"adjustment_amount": 0.0, "reason": "Weather adjustment disabled by user."}
         
         # 8. ML Calibration (Max ±10%)
         raw_row = {
