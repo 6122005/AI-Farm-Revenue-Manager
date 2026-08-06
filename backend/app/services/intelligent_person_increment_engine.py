@@ -34,27 +34,36 @@ class IntelligentPersonIncrementEngine:
         else:
             slope = 150.0
             
-        # 2. Adaptive Neighbor Search
-        radius = 0
-        max_radius = 5
-        target_records = pd.DataFrame()
-        
-        while radius <= max_radius:
-            lower_bound = req_guests - radius
-            upper_bound = req_guests + radius
-            target_records = df[(df['person_count'] >= lower_bound) & (df['person_count'] <= upper_bound)]
-            if len(target_records) >= 8:
-                break
-            radius += 1
+        # 2. Helper to calculate theoretical price for a specific guest count
+        def calc_theoretical_for_g(g: int) -> float:
+            radius = 0
+            max_radius = 5
+            target_records = pd.DataFrame()
             
-        if target_records.empty:
-            target_records = df
+            while radius <= max_radius:
+                lower_bound = g - radius
+                upper_bound = g + radius
+                target_records = df[(df['person_count'] >= lower_bound) & (df['person_count'] <= upper_bound)]
+                if len(target_records) >= 8:
+                    break
+                radius += 1
+                
+            if target_records.empty:
+                target_records = df
+                
+            anchor_guests = target_records['person_count'].mean()
+            anchor_price = target_records['selling_price'].median()
             
-        anchor_guests = target_records['person_count'].mean()
-        anchor_price = target_records['selling_price'].median()
-        
-        # 3. Calculate Theoretical Price for exactly req_guests
-        theoretical_price = anchor_price + slope * (req_guests - anchor_guests)
+            return anchor_price + slope * (g - anchor_guests)
+            
+        # 3. Monotonic Enforcement: Ensure price never drops as guests increase
+        max_theoretical_price = base_price
+        for k in range(1, req_guests + 1):
+            t_price = calc_theoretical_for_g(k)
+            if t_price > max_theoretical_price:
+                max_theoretical_price = t_price
+                
+        theoretical_price = max_theoretical_price
         
         # 4. Strict Additive Rule (Never subtract from Base Price)
         raw_adj = theoretical_price - base_price
@@ -62,12 +71,8 @@ class IntelligentPersonIncrementEngine:
         
         return {
             "adjustment_amount": adj,
-            "reason": f"Adaptive search (radius ±{min(radius, max_radius)}, {len(target_records)} records) yielded theoretical price ₹{theoretical_price:.0f}. Applied strict non-negative floor.",
+            "reason": f"Monotonic adaptive search yielded maximum theoretical price ₹{theoretical_price:.0f}. Applied strict non-negative floor.",
             "evidence": {
-                "search_radius": min(radius, max_radius),
-                "records_found": len(target_records),
-                "anchor_guests": float(anchor_guests),
-                "anchor_price": float(anchor_price),
                 "slope": float(slope),
                 "raw_adjustment": float(raw_adj)
             }
