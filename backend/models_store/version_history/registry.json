@@ -1,5 +1,129 @@
 [
   {
+    "version_id": "20260806_135023",
+    "champion_name": "ExtraTrees",
+    "promoted": true,
+    "metrics": {
+      "r2": 0.9692035759898222,
+      "mae": 115.06794175249182,
+      "rmse": 469.8065063588069,
+      "mape": 4.710185023592752,
+      "prediction_interval_coverage": 90.0,
+      "validation_strategy": "TimeSeriesSplit(n_splits=5)",
+      "feature_importances": {
+        "effective_daily_rate": 0.4384196949662409,
+        "slot_capacity_hours": 0.20016151402334564,
+        "duration_hours": 0.1554816524255701,
+        "commercial_units": 0.09798373361434015,
+        "rolling_price_mean_30": 0.04534266064173108,
+        "season_summer": 0.017976964388377658,
+        "is_couple": 0.009195104642209585,
+        "demand_score": 0.008808911917788372,
+        "month_weekend_slot_avg": 0.0054895803933569295,
+        "person_count": 0.004664867180623793
+      }
+    },
+    "trained_at": "2026-08-06T13:50:56.269040",
+    "artifact_path": "/Users/darshankanani/AI-Farm-Revenue-Manager/backend/models_store/version_history/model_20260806_135023.joblib"
+  },
+  {
+    "version_id": "20260806_125820",
+    "champion_name": "ExtraTrees",
+    "promoted": false,
+    "metrics": {
+      "r2": 0.9953000907530161,
+      "mae": 39.32238857657164,
+      "rmse": 108.16095318915333,
+      "mape": 1.0220762804623154,
+      "prediction_interval_coverage": 90.18518518518519,
+      "validation_strategy": "TimeSeriesSplit(n_splits=5)",
+      "feature_importances": {
+        "effective_daily_rate": 0.7571959621036783,
+        "person_count": 0.08517274065343673,
+        "is_couple": 0.0759351507815797,
+        "month_guest_slot_avg": 0.04418967881531766,
+        "month_festival_slot_avg": 0.008309652761930374,
+        "month_slot_avg": 0.0064442524342911214,
+        "month_weekend_slot_avg": 0.005795837838921878,
+        "month_leadtime_slot_avg": 0.00567972013976367,
+        "month_weather_slot_avg": 0.005081357115258996,
+        "is_peak_season": 0.0012382833156056093
+      }
+    },
+    "trained_at": "2026-08-06T12:58:47.587724",
+    "artifact_path": "/Users/darshankanani/AI-Farm-Revenue-Manager/backend/models_store/version_history/model_20260806_125820.joblib"
+  },
+  {
+    "version_id": "20260806_125549",
+    "champion_name": "ExtraTrees",
+    "promoted": true,
+    "metrics": {
+      "r2": 0.9953000907530161,
+      "mae": 39.32238857657164,
+      "rmse": 108.16095318915333,
+      "mape": 1.0220762804623154,
+      "prediction_interval_coverage": 90.18518518518519,
+      "validation_strategy": "TimeSeriesSplit(n_splits=5)",
+      "feature_importances": {
+        "effective_daily_rate": 0.7571959621036783,
+        "person_count": 0.08517274065343673,
+        "is_couple": 0.0759351507815797,
+        "month_guest_slot_avg": 0.04418967881531766,
+        "month_festival_slot_avg": 0.008309652761930374,
+        "month_slot_avg": 0.0064442524342911214,
+        "month_weekend_slot_avg": 0.005795837838921878,
+        "month_leadtime_slot_avg": 0.00567972013976367,
+        "month_weather_slot_avg": 0.005081357115258996,
+        "is_peak_season": 0.0012382833156056093
+      }
+    },
+    "trained_at": "2026-08-06T12:56:17.036727",
+    "artifact_path": "/Users/darshankanani/AI-Farm-Revenue-Manager/backend/models_store/version_history/model_20260806_125549.joblib"
+  },
+  {
+    "version_id": "20260806_123945",
+    "champion_name": "StackingEnsemble",
+    "promoted": true,
+    "metrics": {
+      "r2": 0.9880940594608534,
+      "mae": 61.17691695792718,
+      "rmse": 292.11290011361,
+      "mape": 2.1316390192977557,
+      "prediction_interval_coverage": 90.0,
+      "validation_strategy": "TimeSeriesSplit(n_splits=5)",
+      "feature_importances": {}
+    },
+    "trained_at": "2026-08-06T12:40:13.799383",
+    "artifact_path": "/Users/darshankanani/AI-Farm-Revenue-Manager/backend/models_store/version_history/model_20260806_123945.joblib"
+  },
+  {
+    "version_id": "20260806_122525",
+    "champion_name": "CatBoost",
+    "promoted": false,
+    "metrics": {
+      "r2": 0.9005052730023069,
+      "mae": 323.9460813981555,
+      "rmse": 844.4402276752264,
+      "mape": 10.695375429133659,
+      "prediction_interval_coverage": 90.0,
+      "validation_strategy": "TimeSeriesSplit(n_splits=5)",
+      "feature_importances": {
+        "effective_daily_rate": 44.18449074298149,
+        "duration_hours": 15.078468850713941,
+        "commercial_units": 13.97012806479753,
+        "rolling_price_mean_30": 9.2876817617541,
+        "slot_utilization_ratio": 5.501021123919802,
+        "opportunity_cost_factor": 3.521455076359628,
+        "demand_score": 1.342654211950589,
+        "slot_type_12H Day": 0.9607849675403021,
+        "hours_over_24": 0.8576729270656992,
+        "person_count": 0.8468161715499506
+      }
+    },
+    "trained_at": "2026-08-06T12:25:56.812094",
+    "artifact_path": "/Users/darshankanani/AI-Farm-Revenue-Manager/backend/models_store/version_history/model_20260806_122525.joblib"
+  },
+  {
     "version_id": "20260806_104629",
     "champion_name": "CatBoost",
     "promoted": false,
@@ -359,96 +483,5 @@
     },
     "trained_at": "2026-08-05T12:26:57.803062",
     "artifact_path": "/Users/darshankanani/AI-Farm-Revenue-Manager/backend/models_store/version_history/model_20260805_122633.joblib"
-  },
-  {
-    "version_id": "20260805_115306",
-    "champion_name": "XGBoost",
-    "promoted": true,
-    "metrics": {
-      "r2": 0.9516775533918399,
-      "mae": 323.7103940450605,
-      "rmse": 587.7549959468042,
-      "mape": 12.141479164691123,
-      "prediction_interval_coverage": 89.92366412213741,
-      "validation_strategy": "TimeSeriesSplit(n_splits=5)",
-      "feature_importances": {
-        "rolling_price_mean_30": 0.3076784014701843,
-        "month_slot_avg": 0.2137661874294281,
-        "is_extended_booking": 0.07266636937856674,
-        "effective_daily_rate": 0.04453843832015991,
-        "p25_price": 0.04257499799132347,
-        "p75_price": 0.03497667610645294,
-        "month_weekend_slot_avg": 0.034797340631484985,
-        "commercial_units": 0.02578800730407238,
-        "duration_hours": 0.022898931056261063,
-        "slot_utilization_ratio": 0.021567676216363907
-      }
-    },
-    "trained_at": "2026-08-05T11:53:44.764665",
-    "artifact_path": "/Users/darshankanani/AI-Farm-Revenue-Manager/backend/models_store/version_history/model_20260805_115306.joblib"
-  },
-  {
-    "version_id": "20260805_113643",
-    "champion_name": "StackingEnsemble",
-    "promoted": true,
-    "metrics": {
-      "r2": 0.9039797374956582,
-      "mae": 192.57324039344343,
-      "rmse": 871.6342116028853,
-      "mape": 2.256958967859429,
-      "prediction_interval_coverage": 89.91304347826087,
-      "validation_strategy": "TimeSeriesSplit(n_splits=5)",
-      "feature_importances": {}
-    },
-    "trained_at": "2026-08-05T11:37:19.193270",
-    "artifact_path": "/Users/darshankanani/AI-Farm-Revenue-Manager/backend/models_store/version_history/model_20260805_113643.joblib"
-  },
-  {
-    "version_id": "20260805_110718",
-    "champion_name": "StackingEnsemble",
-    "promoted": false,
-    "metrics": {
-      "r2": 0.9084377499763687,
-      "mae": 182.61067706702522,
-      "rmse": 851.1596977218695,
-      "mape": 2.1601805101485354,
-      "prediction_interval_coverage": 89.91304347826087,
-      "validation_strategy": "TimeSeriesSplit(n_splits=5)",
-      "feature_importances": {}
-    },
-    "trained_at": "2026-08-05T11:07:54.307406",
-    "artifact_path": "/Users/darshankanani/AI-Farm-Revenue-Manager/backend/models_store/version_history/model_20260805_110718.joblib"
-  },
-  {
-    "version_id": "20260805_105342",
-    "champion_name": "StackingEnsemble",
-    "promoted": false,
-    "metrics": {
-      "r2": 0.9166280825470215,
-      "mae": 185.96534827873182,
-      "rmse": 817.8742748265829,
-      "mape": 3.5815759436855306,
-      "prediction_interval_coverage": 89.92366412213741,
-      "validation_strategy": "TimeSeriesSplit(n_splits=5)",
-      "feature_importances": {}
-    },
-    "trained_at": "2026-08-05T10:54:19.965509",
-    "artifact_path": "/Users/darshankanani/AI-Farm-Revenue-Manager/backend/models_store/version_history/model_20260805_105342.joblib"
-  },
-  {
-    "version_id": "20260805_104906",
-    "champion_name": "StackingEnsemble",
-    "promoted": false,
-    "metrics": {
-      "r2": 0.9184749641369072,
-      "mae": 184.59034955147675,
-      "rmse": 808.7646350871668,
-      "mape": 3.5880870111469885,
-      "prediction_interval_coverage": 89.92366412213741,
-      "validation_strategy": "TimeSeriesSplit(n_splits=5)",
-      "feature_importances": {}
-    },
-    "trained_at": "2026-08-05T10:49:43.786558",
-    "artifact_path": "/Users/darshankanani/AI-Farm-Revenue-Manager/backend/models_store/version_history/model_20260805_104906.joblib"
   }
 ]

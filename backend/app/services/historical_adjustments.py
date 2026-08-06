@@ -37,52 +37,12 @@ class HistoricalAdjustments:
     @classmethod
     def calculate_festival_premium(cls, context: PricingContext) -> Dict[str, Any]:
         """
-        Rule 6: Festival Engine V2
-        Uses Sheet4 (via festival_engine) history, borrows progressively if no history exists.
+        Rule 6: Festival Engine V2 (DISABLED)
+        Disabled per user request.
         """
-        req_date = context.request.get("start_datetime")
-        df = context.retrieved_segment
-        base_price = context.base_price
-        
-        try:
-            dt_in = datetime.strptime(req_date, "%Y-%m-%d %H:%M")
-            dt_out = dt_in + timedelta(hours=12) # Approximation to check overlap
-        except:
-            return {"adjustment_amount": 0.0, "reason": "Invalid date format for festival check."}
-            
-        overlap_info = festival_engine.detect_festivals(dt_in, dt_out)
-        is_festival = overlap_info.get("is_festival", False)
-        festival_name = overlap_info.get("festival_name", "Festival")
-        
-        if not is_festival:
-            return {
-                "adjustment_amount": 0.0,
-                "reason": "No festival detected on this date."
-            }
-            
-        df_fest = df[df['is_festival'] == 1] if 'is_festival' in df.columns else pd.DataFrame()
-        
-        if not df_fest.empty:
-            fest_median = context.get_segment_median(df_fest)
-            adj = fest_median - base_price
-            return {
-                "adjustment_amount": float(adj),
-                "reason": f"{festival_name}: Historical festival median in this segment is ₹{fest_median:.0f}. Adj: ₹{adj:.0f}."
-            }
-            
-        insights = FeatureEngineer._load_insights()
-        learned_intel = FeatureEngineer._load_festival_intelligence()
-        if festival_name in learned_intel:
-            mult = learned_intel[festival_name]
-            reason = f"{festival_name}: Borrowed learned specific multiplier ({mult:.2f}x)."
-        else:
-            mult = insights.get("festival_premium_ratio", 1.30)
-            reason = f"{festival_name}: Borrowed global historical festival multiplier ({mult:.2f}x)."
-            
-        adj = (base_price * mult) - base_price
         return {
-            "adjustment_amount": float(adj),
-            "reason": reason
+            "adjustment_amount": 0.0,
+            "reason": "No Festival"
         }
 
     @classmethod

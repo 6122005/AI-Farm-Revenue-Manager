@@ -9,6 +9,8 @@ class SimilarBookingRetriever:
     
     @classmethod
     def get_slot_similarity(cls, req_slot: str, can_slot: str) -> float:
+        if not isinstance(req_slot, str) or not isinstance(can_slot, str):
+            return 0.0
         if req_slot == can_slot:
             return 20.0
         if "24H" in req_slot and "24H" in can_slot:

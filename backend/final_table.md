@@ -1,62 +1,54 @@
-| Slot | Month | Weekday Price (₹) | Weekend Price (₹) |
-|---|---|---|---|
-| 12H Day | 1 | ₹3100.0 | ₹2500.0 |
-| 12H Day | 2 | ₹2600.0 | ₹2900.0 |
-| 12H Day | 3 | ₹3600.0 | ₹3600.0 |
-| 12H Day | 4 | ₹3900.0 | ₹3900.0 |
-| 12H Day | 5 | ₹3600.0 | ₹3600.0 |
-| 12H Day | 6 | ₹3600.0 | ₹3600.0 |
-| 12H Day | 7 | ₹3100.0 | ₹3100.0 |
-| 12H Day | 8 | ₹2100.0 | ₹2100.0 |
-| 12H Day | 9 | ₹2800.0 | ₹2800.0 |
-| 12H Day | 10 | ₹2600.0 | ₹2600.0 |
-| 12H Day | 11 | ₹3100.0 | ₹3000.0 |
-| 12H Day | 12 | ₹2800.0 | ₹3100.0 |
-| 12H Night | 1 | ₹2600.0 | ₹2600.0 |
-| 12H Night | 2 | ₹2300.0 | ₹2500.0 |
-| 12H Night | 3 | ₹2900.0 | ₹2900.0 |
-| 12H Night | 4 | ₹3400.0 | ₹3300.0 |
-| 12H Night | 5 | ₹2800.0 | ₹2900.0 |
-| 12H Night | 6 | ₹2800.0 | ₹3000.0 |
-| 12H Night | 7 | ₹2500.0 | ₹2900.0 |
-| 12H Night | 8 | ₹2700.0 | ₹2800.0 |
-| 12H Night | 9 | ₹2700.0 | ₹2900.0 |
-| 12H Night | 10 | ₹2900.0 | ₹3000.0 |
-| 12H Night | 11 | ₹2300.0 | ₹2300.0 |
-| 12H Night | 12 | ₹2800.0 | ₹2800.0 |
-| 24H Day | 1 | ₹4800.0 | ₹4800.0 |
-| 24H Day | 2 | ₹4400.0 | ₹4900.0 |
-| 24H Day | 3 | ₹6100.0 | ₹6100.0 |
-| 24H Day | 4 | ₹6500.0 | ₹6800.0 |
-| 24H Day | 5 | ₹6100.0 | ₹7200.0 |
-| 24H Day | 6 | ₹5500.0 | ₹6000.0 |
-| 24H Day | 7 | ₹5200.0 | ₹5500.0 |
-| 24H Day | 8 | ₹5400.0 | ₹5500.0 |
-| 24H Day | 9 | ₹4500.0 | ₹4900.0 |
-| 24H Day | 10 | ₹5000.0 | ₹5100.0 |
-| 24H Day | 11 | ₹4800.0 | ₹4800.0 |
-| 24H Day | 12 | ₹5300.0 | ₹5300.0 |
-| 24H Night | 1 | ₹3900.0 | ₹5000.0 |
-| 24H Night | 2 | ₹3600.0 | ₹4800.0 |
-| 24H Night | 3 | ₹4900.0 | ₹6300.0 |
-| 24H Night | 4 | ₹5000.0 | ₹11800.0 |
-| 24H Night | 5 | ₹5900.0 | ₹11800.0 |
-| 24H Night | 6 | ₹5300.0 | ₹7800.0 |
-| 24H Night | 7 | ₹3700.0 | ₹5000.0 |
-| 24H Night | 8 | ₹4800.0 | ₹4800.0 |
-| 24H Night | 9 | ₹4500.0 | ₹4700.0 |
-| 24H Night | 10 | ₹4000.0 | ₹4600.0 |
-| 24H Night | 11 | ₹4200.0 | ₹4700.0 |
-| 24H Night | 12 | ₹4800.0 | ₹5400.0 |
-| Couple Full Day | 1 | ₹2800.0 | ₹3100.0 |
-| Couple Full Day | 2 | ₹2300.0 | ₹2500.0 |
-| Couple Full Day | 3 | ₹4100.0 | ₹4100.0 |
-| Couple Full Day | 4 | ₹3300.0 | ₹4100.0 |
-| Couple Full Day | 5 | ₹3800.0 | ₹4100.0 |
-| Couple Full Day | 6 | ₹2800.0 | ₹3500.0 |
-| Couple Full Day | 7 | ₹2800.0 | ₹3100.0 |
-| Couple Full Day | 8 | ₹1500.0 | ₹3000.0 |
-| Couple Full Day | 9 | ₹2400.0 | ₹2500.0 |
-| Couple Full Day | 10 | ₹2300.0 | ₹2600.0 |
-| Couple Full Day | 11 | ₹2700.0 | ₹2900.0 |
-| Couple Full Day | 12 | ₹2800.0 | ₹3000.0 |
+# Final Monthly Prediction Matrix
+
+This matrix contains the exact recommended prices from the AI model (after applying the NaN population fix and restoring normal fallback logic).
+
+| Month | Slot | Normal Weekday Price | Normal Weekend Price |
+| :--- | :--- | :--- | :--- |
+| January | 12H Day | ₹2,813 | ₹2,813 |
+| January | 12H Night | ₹2,750 | ₹4,033 |
+| January | 24H Day | ₹9,087 | ₹9,087 |
+| January | 24H Night | ₹4,370 | ₹5,569 |
+| February | 12H Day | ₹2,554 | ₹2,554 |
+| February | 12H Night | ₹2,574 | ₹4,040 |
+| February | 24H Day | ₹4,830 | ₹4,830 |
+| February | 24H Night | ₹4,015 | ₹5,592 |
+| March | 12H Day | ₹3,705 | ₹3,705 |
+| March | 12H Night | ₹3,080 | ₹2,942 |
+| March | 24H Day | ₹4,345 | ₹4,345 |
+| March | 24H Night | ₹5,163 | ₹8,496 |
+| April | 12H Day | ₹3,687 | ₹3,687 |
+| April | 12H Night | ₹3,575 | ₹3,974 |
+| April | 24H Day | ₹4,400 | ₹4,400 |
+| April | 24H Night | ₹5,779 | ₹10,406 |
+| May | 12H Day | ₹4,145 | ₹4,169 |
+| May | 12H Night | ₹3,190 | ₹2,062 |
+| May | 24H Day | ₹5,276 | ₹5,276 |
+| May | 24H Night | ₹6,764 | ₹11,057 |
+| June | 12H Day | ₹3,125 | ₹3,125 |
+| June | 12H Night | ₹2,640 | ₹3,974 |
+| June | 24H Day | ₹4,334 | ₹4,334 |
+| June | 24H Night | ₹5,556 | ₹7,947 |
+| July | 12H Day | ₹2,490 | ₹2,490 |
+| July | 12H Night | ₹2,277 | ₹3,150 |
+| July | 24H Day | ₹4,125 | ₹4,125 |
+| July | 24H Night | ₹3,771 | ₹5,706 |
+| August | 12H Day | ₹2,386 | ₹2,386 |
+| August | 12H Night | ₹2,933 | ₹3,208 |
+| August | 24H Day | ₹3,850 | ₹3,850 |
+| August | 24H Night | ₹5,088 | ₹4,756 |
+| September | 12H Day | ₹1,806 | ₹1,806 |
+| September | 12H Night | ₹2,813 | ₹3,077 |
+| September | 24H Day | ₹3,611 | ₹3,611 |
+| September | 24H Night | ₹5,063 | ₹4,767 |
+| October | 12H Day | ₹2,532 | ₹2,532 |
+| October | 12H Night | ₹2,950 | ₹2,880 |
+| October | 24H Day | ₹4,400 | ₹4,400 |
+| October | 24H Night | ₹5,188 | ₹7,050 |
+| November | 12H Day | ₹2,235 | ₹2,235 |
+| November | 12H Night | ₹2,438 | ₹4,040 |
+| November | 24H Day | ₹9,087 | ₹9,087 |
+| November | 24H Night | ₹4,431 | ₹5,610 |
+| December | 12H Day | ₹2,550 | ₹2,550 |
+| December | 12H Night | ₹2,860 | ₹2,832 |
+| December | 24H Day | ₹4,988 | ₹4,988 |
+| December | 24H Night | ₹3,819 | ₹5,483 |

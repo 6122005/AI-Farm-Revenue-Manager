@@ -1,0 +1,82 @@
+==============================
+DATA INGESTION AUDIT
+==============================
+
+Uploaded Rows              : 763
+
+Rows Parsed Successfully   : 757
+
+Rows Dropped               : 6
+
+--------------------------------
+
+Dropped Row IDs
+
+Row 37
+
+Reason:
+Missing or Invalid Price (<= 0)
+
+----------------
+
+Row 291
+
+Reason:
+Missing or Invalid Price (<= 0)
+
+----------------
+
+Row 334
+
+Reason:
+Missing or Invalid Price (<= 0)
+
+----------------
+
+Row 390
+
+Reason:
+Missing or Invalid Price (<= 0)
+
+----------------
+
+Row 425
+
+Reason:
+Missing or Invalid Price (<= 0)
+
+----------------
+
+Row 449
+
+Reason:
+Missing or Invalid Price (<= 0)
+
+----------------
+
+==============================
+
+FEATURE SOURCE AUDIT
+
+Weekend Source
+Excel (Found 'Weekend' column)
+✓ (Used directly from Excel)
+
+Festival Source
+Excel (Found 'Festivals ' column)
+✓ (Used directly from Excel)
+
+Season Source
+Excel (Found 'season' column)
+✓ (Used directly from Excel)
+
+Lead Days Source
+Excel (Found 'Lead Days' column)
+✓ (Used directly from Excel)
+
+Slot Source
+Excel (Found 'Booking Category' column)
+✓ (Used directly from Excel)
+
+SUCCESS: Pipeline has been upgraded. Valid business outliers are no longer dropped, and Excel data is strictly trusted!
+==============================

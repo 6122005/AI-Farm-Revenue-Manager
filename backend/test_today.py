@@ -1,5 +1,5 @@
-import json
 from app.services.prediction_engine import prediction_engine
+import traceback
 
 today_str = "2026-08-06"
 payload = {
@@ -15,15 +15,7 @@ payload = {
 
 try:
     res = prediction_engine.predict(payload)
-    print(f"Final Price: {res.recommended_price}")
-    print("\nFactors (Reasoning):")
-    for factor in res.price_factors:
-        print(f"- {factor.factor}: {factor.impact_amount}")
-        
-    print("\nContext:")
-    print(f"RAG Base Price: {res.rag_base_price}")
-    print(f"ML Model Price: {res.shadow_ml_price}")
+    print("Success")
 except Exception as e:
-    import traceback
     traceback.print_exc()
 

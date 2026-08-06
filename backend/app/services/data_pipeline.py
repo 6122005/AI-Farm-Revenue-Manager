@@ -252,22 +252,35 @@ class DataPipeline:
 
         # 4. Duration Determination
         dur_col = next((c for c in df.columns if any(k in str(c).lower() for k in ["duration", "hours", "stay"])), None)
-        if dur_col:
-            mapped_df["duration_hours"] = pd.to_numeric(df[dur_col], errors="coerce").fillna(12.0)
-        else:
-            # Infer from start time & end time if available
-            start_t_col = next((c for c in df.columns if "start time" in str(c).lower() or "checkin_time" in str(c).lower()), None)
-            end_t_col = next((c for c in df.columns if "end time" in str(c).lower() or "checkout_time" in str(c).lower()), None)
-            if start_t_col and end_t_col:
+        end_d_col = next((c for c in df.columns if "end date" in str(c).lower() or "checkout_date" in str(c).lower()), None)
+        
+        def _calc_dur(row):
+            # 1. Try to compute from Start Date and End Date directly if they have times
+            try:
+                if end_d_col and not pd.isna(row.get(end_d_col)):
+                    sd = pd.to_datetime(row.get(date_col))
+                    ed = pd.to_datetime(row.get(end_d_col))
+                    diff = (ed - sd).total_seconds() / 3600.0
+                    
+                    if diff > 15:
+                        return 24.0 # Treat anything > 15 hours as a 24H slot
+                    elif diff > 0:
+                        return 12.0 # Treat anything else > 0 as a 12H slot
+            except Exception:
+                pass
+            
+            # 2. Try the explicit duration column if it has a valid number
+            if dur_col and not pd.isna(row.get(dur_col)):
                 try:
-                    s_t = pd.to_datetime(df[start_t_col], format="%H:%M:%S", errors="coerce").dt.hour.fillna(12)
-                    e_t = pd.to_datetime(df[end_t_col], format="%H:%M:%S", errors="coerce").dt.hour.fillna(12)
-                    # Duration is roughly:
-                    mapped_df["duration_hours"] = 12.0
+                    val = float(row.get(dur_col))
+                    if val > 0: return float(val)
                 except Exception:
-                    mapped_df["duration_hours"] = 12.0
-            else:
-                mapped_df["duration_hours"] = 12.0
+                    pass
+                    
+            # 3. Ultimate fallback
+            return 12.0
+
+        mapped_df["duration_hours"] = df.apply(_calc_dur, axis=1)
 
         # Extended Stay Flag (Step 1 Rule)
         mapped_df["extended_stay"] = (mapped_df["duration_hours"] > 24).astype(int)
@@ -323,6 +336,11 @@ class DataPipeline:
                 mapped_df["lead_days"] = 7
         else:
             mapped_df["lead_days"] = 7
+            
+        # Clean up raw columns that were explicitly mapped to prevent FeatureEngineer's automatic renamer
+        # from renaming the raw (and potentially sparse) columns into our clean column names.
+        cols_to_drop = [c for c in [price_col, date_col, slot_col, guests_col, lead_col] if c and c in mapped_df.columns and c not in ["selling_price", "booking_date", "slot_type", "commercial_slot", "person_count", "lead_days"]]
+        mapped_df.drop(columns=cols_to_drop, inplace=True, errors="ignore")
 
         # 7. Competitor Price
         if competitor_col and competitor_col in df.columns:
@@ -476,14 +494,14 @@ class DataPipeline:
         df_temp["booking_date_dt"] = pd.to_datetime(df_temp["booking_date"], errors="coerce")
         df_temp["month"] = df_temp["booking_date_dt"].dt.month.fillna(8).astype(int)
         
-        if "is_weekend" not in df_temp.columns:
+        if "is_weekend" not in df_temp.columns or df_temp["is_weekend"].isna().all() or (df_temp["is_weekend"] == 0).all():
             def _compute_business_weekend_df(r):
                 day = r["booking_date_dt"].dayofweek
                 slot = str(r.get("slot_type", ""))
-                if day == 5 and "Night" in slot:
-                    return 1
-                if day == 6 and "Day" in slot:
-                    return 1
+                # User specifically requested: Saturday Day, Saturday Night, Sunday Day ONLY.
+                # Friday Night is explicitly excluded.
+                if day == 5: return 1 # Saturday Day and Night
+                if day == 6 and "Day" in slot: return 1 # Sunday Day
                 return 0
                 
             df_temp["is_weekend"] = df_temp.apply(_compute_business_weekend_df, axis=1)
