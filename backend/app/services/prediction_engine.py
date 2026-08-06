@@ -126,11 +126,14 @@ class PredictionEngine:
         
         # Rule 2: Official Business Logic for Weekend (NO WEEKDAY CALENDAR CHECKS)
         day_of_week = start_dt.weekday()
-        hour = start_dt.hour
         is_weekend_val = 0
-        if day_of_week == 5 and "Night" in commercial_slot and hour >= 17:
+        
+        # User defined weekend:
+        # Saturday Day (12H/24H) & Saturday Night (12H/24H)
+        # Sunday Day (12H/24H)
+        if day_of_week == 5:
             is_weekend_val = 1
-        elif day_of_week == 6 and "Day" in commercial_slot and 6 <= hour <= 12:
+        elif day_of_week == 6 and "Day" in commercial_slot:
             is_weekend_val = 1
             
         duration_hours = (end_dt - start_dt).total_seconds() / 3600.0
