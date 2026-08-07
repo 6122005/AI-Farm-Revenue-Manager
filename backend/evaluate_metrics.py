@@ -26,19 +26,22 @@ for idx, row in df.iterrows():
         # PredictionEngine requires them but we can just pass strings
     }
     
-    # We need to construct start/end datetimes for the engine to not crash
-    booking_date = str(row.get('booking_date', '2027-01-01'))
+    import datetime
+    booking_date = str(row.get('booking_date', '2027-01-01'))[:10]
     
     if "Night" in str(req["commercial_slot"]):
-        req["start_datetime"] = f"{booking_date[:10]} 19:00"
-        req["end_datetime"] = f"{booking_date[:10]} 19:00" # dummy, duration matters
+        start_dt_obj = datetime.datetime.strptime(f"{booking_date} 19:00", "%Y-%m-%d %H:%M")
     else:
-        req["start_datetime"] = f"{booking_date[:10]} 10:00"
-        req["end_datetime"] = f"{booking_date[:10]} 10:00"
+        start_dt_obj = datetime.datetime.strptime(f"{booking_date} 10:00", "%Y-%m-%d %H:%M")
+        
+    end_dt_obj = start_dt_obj + datetime.timedelta(hours=float(req["duration_hours"]))
+    
+    req["start_datetime"] = start_dt_obj.strftime("%Y-%m-%d %H:%M")
+    req["end_datetime"] = end_dt_obj.strftime("%Y-%m-%d %H:%M")
 
     try:
         res = engine.predict(req)
-        pred_price = res.recommended_price
+        pred_price = res.revenue_optimized_price
         
         actual_prices.append(row['selling_price'])
         predicted_prices.append(pred_price)

@@ -483,27 +483,66 @@ class FeatureEngineer:
             # Do not consider ANY festival record for calculating general averages to avoid skewing normal prices
             df = df[df["is_festival"] == 0]
 
+            # --- YOY INFLATION & TIME DECAY LOGIC ---
+            max_year = df["year"].max() if not df.empty else 2026
+            yearly_medians = df.groupby("year")["base_selling_price"].median()
+            valid_years = sorted([y for y in yearly_medians.index if y >= 2023])
+            
+            inflation_rates = []
+            for i in range(1, len(valid_years)):
+                prev_yr = valid_years[i-1]
+                curr_yr = valid_years[i]
+                if yearly_medians[prev_yr] > 0:
+                    rate = (yearly_medians[curr_yr] / yearly_medians[prev_yr]) - 1.0
+                    inflation_rates.append(rate)
+            
+            # User requested to revoke the 5% change, reverting to 10%
+            global_yoy_inflation = 0.10
+            avg_dict["global_yoy_inflation"] = float(global_yoy_inflation)
+            avg_dict["max_year_in_data"] = int(max_year)
+            
+            # Apply inflation to base_selling_price to normalize to Current Market Value (CMV) of max_year
+            def calc_cmv(r):
+                # USER RULE: 0% inflation for Nov-Feb, 10% inflation for March-Oct
+                if r["month"] in [11, 12, 1, 2]:
+                    return r["base_selling_price"]
+                years_diff = max(0, max_year - r["year"])
+                return r["base_selling_price"] * ((1.0 + global_yoy_inflation) ** years_diff)
+                
+            df["cmv_base_price"] = df.apply(calc_cmv, axis=1)
+            df_full["cmv_base_price"] = df_full.apply(calc_cmv, axis=1)
+            
+            def time_decay_mean(group):
+                if len(group) == 0:
+                    return 0.0
+                # weights: max_year -> 1.0, max_year-1 -> 0.8, max_year-2 -> 0.4, older -> 0.2
+                weights = group["year"].apply(lambda y: 1.0 if y >= max_year else (0.8 if y == max_year - 1 else (0.4 if y == max_year - 2 else 0.2)))
+                if weights.sum() == 0:
+                    return np.mean(group["cmv_base_price"])
+                return np.average(group["cmv_base_price"], weights=weights)
 
-            # 1. slot_month_weekend_avg & independent segment statistics (using base_selling_price)
-            gp1 = df.groupby(["commercial_slot", "month", "is_weekend"])["base_selling_price"].mean().reset_index()
+            def time_decay_median(group):
+                # Fallback to simple median for now as weighted median is complex
+                return np.median(group["cmv_base_price"])
+
+            # 1. slot_month_weekend_avg & independent segment statistics (using cmv_base_price + time decay)
+            gp1 = df.groupby(["commercial_slot", "month", "is_weekend"]).apply(time_decay_mean).reset_index(name="cmv_base_price")
             for _, row in gp1.iterrows():
                 key = f"slot_month_weekend_{row['commercial_slot']}_{int(row['month'])}_{int(row['is_weekend'])}"
-                avg_dict[key] = float(row["base_selling_price"])
+                avg_dict[key] = float(row["cmv_base_price"])
             
             # Month & Slot Specific Weekend Premium Ratios
-            gp_wk = df[df["is_weekend"] == 1].groupby(["commercial_slot", "month"])["base_selling_price"].mean().reset_index()
-            gp_wd = df[df["is_weekend"] == 0].groupby(["commercial_slot", "month"])["base_selling_price"].mean().reset_index()
-            wd_map = {(row['commercial_slot'], int(row['month'])): float(row['base_selling_price']) for _, row in gp_wd.iterrows()}
-
+            gp_wk = df[df["is_weekend"] == 1].groupby(["commercial_slot", "month"]).apply(time_decay_mean).reset_index(name="cmv_base_price")
+            gp_wd = df[df["is_weekend"] == 0].groupby(["commercial_slot", "month"]).apply(time_decay_mean).reset_index(name="cmv_base_price")
+            wd_map = {(row['commercial_slot'], int(row['month'])): float(row['cmv_base_price']) for _, row in gp_wd.iterrows()}
             
             for _, row in gp_wk.iterrows():
                 slot_code = str(row['commercial_slot'])
                 slot_norm = slot_engine.normalize_commercial_slot(slot_code)
                 m_code = int(row['month'])
-                wk_mean = float(row['base_selling_price'])
+                wk_mean = float(row['cmv_base_price'])
                 wd_mean = wd_map.get((slot_code, m_code), 0.0)
                 
-                # Absolute rupee difference calculation (No percentage multiplication!)
                 abs_diff = round(wk_mean - wd_mean, 2) if wd_mean > 0 else 0.0
                 ratio = round(wk_mean / wd_mean, 3) if wd_mean > 0 else 1.25
                 
@@ -514,12 +553,9 @@ class FeatureEngineer:
                     avg_dict[key] = ratio
 
             # Learned Commercial Ratio Engine (24H vs 12H)
-            gp_slot = df_full.groupby(["month", "is_weekend", "is_festival", "commercial_slot"])["base_selling_price"].median().reset_index()
-            # We need to map 24H -> 12H equivalents
+            gp_slot = df_full.groupby(["month", "is_weekend", "is_festival", "commercial_slot"])["cmv_base_price"].median().reset_index()
             for (m_c, w_c, f_c), group in gp_slot.groupby(["month", "is_weekend", "is_festival"]):
-                prices = {row["commercial_slot"]: row["base_selling_price"] for _, row in group.iterrows()}
-                
-                # Check pairs (e.g. 24H Day -> 12H Day, 24H Night -> 12H Night)
+                prices = {row["commercial_slot"]: row["cmv_base_price"] for _, row in group.iterrows()}
                 for c_slot, c_price in prices.items():
                     if "24H" in c_slot:
                         eq_12h = c_slot.replace("24H", "12H")
@@ -527,15 +563,16 @@ class FeatureEngineer:
                             ratio = round(c_price / prices[eq_12h], 3)
                             avg_dict[f"learned_ratio_24_12_{c_slot}_{int(m_c)}_{int(w_c)}_{int(f_c)}"] = ratio
 
-
             # Independent Segment Statistics (mean, median, std, count, confidence, p25, p75)
-            gp_stats = df.groupby(["commercial_slot", "month", "is_weekend"])["base_selling_price"].agg(
-                mean="mean",
-                median="median",
-                std="std",
-                count="count",
-                p25=lambda x: np.percentile(x, 25),
-                p75=lambda x: np.percentile(x, 75)
+            gp_stats = df.groupby(["commercial_slot", "month", "is_weekend"]).apply(
+                lambda g: pd.Series({
+                    "mean": time_decay_mean(g),
+                    "median": np.median(g["cmv_base_price"]),
+                    "std": np.std(g["cmv_base_price"]) if len(g) > 1 else 0.0,
+                    "count": float(len(g)),
+                    "p25": np.percentile(g["cmv_base_price"], 25) if len(g) > 0 else 0.0,
+                    "p75": np.percentile(g["cmv_base_price"], 75) if len(g) > 0 else 0.0
+                })
             ).reset_index()
             
             for _, row in gp_stats.iterrows():
@@ -558,20 +595,14 @@ class FeatureEngineer:
             # Trimmed Mean & Weighted Median for outlier resistance
             for (slot_c, m_c, w_c), grp in df.groupby(["commercial_slot", "month", "is_weekend"]):
                 slot_norm = slot_engine.normalize_commercial_slot(slot_c)
-                prices = grp["base_selling_price"].sort_values().values
-
-                # Use standard mean instead of trimmed mean to include all top 10% data
-                t_mean = float(np.mean(prices))
-                    
+                prices = grp["cmv_base_price"].sort_values().values
+                t_mean = time_decay_mean(grp)
                 w_med = float(np.median(prices))
                 for s_key in set([str(slot_c), slot_norm]):
                     prefix = f"seg_{s_key}_{int(m_c)}_{int(w_c)}"
                     avg_dict[f"{prefix}_trimmed_mean"] = t_mean
                     avg_dict[f"{prefix}_weighted_median"] = w_med
-
-
-
-                
+                    
             # 2. slot_weekend_avg
             gp2 = df.groupby(["commercial_slot", "is_weekend"])["selling_price"].mean().reset_index()
             for _, row in gp2.iterrows():
@@ -1196,23 +1227,49 @@ class FeatureEngineer:
         df = df.copy()
         
         col_map = {}
+        explicit_cols = ["booking_date", "commercial_slot", "person_count", "selling_price", "lead_days", "competitor_price"]
+        cols_to_drop = []
         for c in df.columns:
+            if c in explicit_cols:
+                continue
             clean = str(c).strip().lower().replace(" ", "_").replace("-", "_")
             if clean in ["date", "bookingdate", "booking_date", "check_in", "checkin", "checkin_date", "event_date", "day"]:
-                col_map[c] = "booking_date"
+                if "booking_date" in explicit_cols:
+                    cols_to_drop.append(c)
+                else:
+                    col_map[c] = "booking_date"
             elif clean in ["slot", "commercial_slot", "slot_type", "inventory_slot", "timing", "type", "booking_category", "category"]:
-                col_map[c] = "commercial_slot"
+                if "commercial_slot" in explicit_cols:
+                    cols_to_drop.append(c)
+                else:
+                    col_map[c] = "commercial_slot"
             elif clean in ["person_count", "guest_count", "guests", "no_of_guests", "persons", "pax", "people", "count"]:
-                col_map[c] = "person_count"
+                if "person_count" in explicit_cols:
+                    cols_to_drop.append(c)
+                else:
+                    col_map[c] = "person_count"
             elif clean in ["selling_price", "price", "rent", "farm_price", "booked_price", "booking_amount", "final_price", "price_rs", "rupees", "charges", "total_price", "cost", "rate"]:
-                col_map[c] = "selling_price"
+                if "selling_price" in explicit_cols:
+                    cols_to_drop.append(c)
+                else:
+                    col_map[c] = "selling_price"
             elif clean in ["lead_days", "lead_time", "lead_days_advance", "advance_days"]:
-                col_map[c] = "lead_days"
+                if "lead_days" in explicit_cols:
+                    cols_to_drop.append(c)
+                else:
+                    col_map[c] = "lead_days"
             elif clean in ["competitor_price", "comp_price", "market_price"]:
-                col_map[c] = "competitor_price"
+                if "competitor_price" in explicit_cols:
+                    cols_to_drop.append(c)
+                else:
+                    col_map[c] = "competitor_price"
             else:
-                col_map[c] = clean
+                if clean in explicit_cols:
+                    cols_to_drop.append(c)
+                else:
+                    col_map[c] = clean
         
+        df.drop(columns=cols_to_drop, inplace=True)
         df.rename(columns=col_map, inplace=True)
         df = df.loc[:, ~df.columns.duplicated()]
 

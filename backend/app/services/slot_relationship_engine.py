@@ -97,15 +97,21 @@ class IntelligentSlotSimilarityEngine:
 
         # Level 1: Try Monthly Ratio
         if target in rels['monthly'].get(month, {}) and source in rels['monthly'][month][target]:
-            return rels['monthly'][month][target][source], "monthly"
-            
+            ratio, level = rels['monthly'][month][target][source], "monthly"
         # Level 2: Try Seasonal Ratio
-        if target in rels['seasonal'].get(season, {}) and source in rels['seasonal'][season][target]:
-            return rels['seasonal'][season][target][source], "seasonal"
-            
+        elif target in rels['seasonal'].get(season, {}) and source in rels['seasonal'][season][target]:
+            ratio, level = rels['seasonal'][season][target][source], "seasonal"
         # Level 3: Try Global Ratio
-        if target in rels['global'] and source in rels['global'][target]:
-            return rels['global'][target][source], "global"
+        elif target in rels['global'] and source in rels['global'][target]:
+            ratio, level = rels['global'][target][source], "global"
+        else:
+            ratio, level = None, None
+            
+        if ratio is not None:
+            # Apply user-requested cap: 24H -> 12H ratio must not exceed 0.55
+            if "24H" in source and "12H" in target:
+                ratio = min(ratio, 0.55)
+            return ratio, level
 
         # Fallback bounds if completely missing
         if "24H" in source and "12H" in target: return 0.5, "fallback_heuristic"

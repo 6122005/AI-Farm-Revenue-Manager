@@ -593,6 +593,24 @@ class DataPipeline:
         df_temp['outlier_reason'] = outlier_reasons
         df_temp['is_global_outlier'] = df_temp['outlier_score'] >= 2
         
+        # --- START USER LOGIC: Drop very low priced records (<= 1000) ---
+        df_temp = df_temp[df_temp["selling_price"] > 1000]
+        # Additional Rule: Drop 24H Night records with rent <= 3000
+        mask_24h_night_low = (df_temp["slot_type"].astype(str).str.upper().str.contains("24H NIGHT")) & (df_temp["selling_price"] <= 3000)
+        df_temp = df_temp[~mask_24h_night_low]
+        
+        # USER REQUEST: Explicitly drop the 13-Jan-2024 12H Night record (₹4500)
+        mask_jan_13 = (df_temp["booking_date_dt"] == pd.to_datetime("2024-01-13")) & (df_temp["slot_type"].astype(str).str.upper().str.contains("12H"))
+        df_temp = df_temp[~mask_jan_13]
+        
+        # USER REQUEST: Explicitly drop the 20-Nov-2024 24H Night record (₹8000)
+        mask_nov_20 = (df_temp["booking_date_dt"] == pd.to_datetime("2024-11-20")) & (df_temp["slot_type"].astype(str).str.upper().str.contains("24H NIGHT"))
+        df_temp = df_temp[~mask_nov_20]
+        # --- END USER LOGIC ---
+        
+        # Finally, sort by date chronologically
+        df_temp = df_temp.sort_values(by="booking_date", ascending=True)
+        
         # Clean up temporary columns
         for col in ["booking_date_dt", "segment_strict", "segment_month_slot", "segment_month", "segment_slot"]:
             if col in df_temp.columns:

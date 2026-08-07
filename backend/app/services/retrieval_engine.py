@@ -78,7 +78,11 @@ class SimilarBookingRetriever:
                 "cv": 0.0
             }
             
-        prices = df_subset['selling_price'].values
+        if "cmv_base_price" in df_subset.columns:
+            prices = df_subset['cmv_base_price'].values
+        else:
+            prices = df_subset['selling_price'].values
+            
         booking_count = len(prices)
         median_price = np.median(prices)
         
@@ -114,6 +118,14 @@ class SimilarBookingRetriever:
         if "is_festival" in df.columns:
             df = df[df["is_festival"] == 0]
 
+        # USER REQUEST RULE: For August to December Weekdays, aggressively drop the top 30%
+        # of high-priced records (hidden events) per slot type so that the weekday base price stays low.
+        if req_month >= 8 and req_weekend == 0:
+            mask = (df["month"] >= 8) & (df["is_weekend"] == 0) & (df["commercial_slot"] == req_slot)
+            if mask.sum() > 3:
+                cap_val = df[mask]["selling_price"].quantile(0.70)
+                df = df[~(mask & (df["selling_price"] > cap_val))]
+
         candidates = pd.DataFrame()
         level_used = 0
         borrowing_metadata = None
@@ -135,6 +147,8 @@ class SimilarBookingRetriever:
             ratio, source_level = slot_relationship_engine.get_conversion_ratio(req_slot, best_slot, t_month)
             res_df = pool_df[pool_df['commercial_slot'] == best_slot].copy()
             res_df['selling_price'] = res_df['selling_price'] * ratio
+            if 'cmv_base_price' in res_df.columns:
+                res_df['cmv_base_price'] = res_df['cmv_base_price'] * ratio
             
             meta = {
                 "borrowed_from": f"Slot Conversion: {best_slot} -> {req_slot}",

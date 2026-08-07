@@ -112,6 +112,8 @@ class PredictionEngine:
             from app.services.data_pipeline import DataPipeline
             df = DataPipeline.load_and_process_file(path)
             
+            # cmv_base_price is already calculated perfectly inside DataPipeline via FeatureEngineer
+            
             from app.services.festival_engine import festival_engine
             def get_is_fest(row):
                 if pd.notna(row.get('booking_date')):
@@ -188,7 +190,10 @@ class PredictionEngine:
         
         # 5. Festival Adjustment (New Manual Excel Engine)
         from app.services.manual_festival_engine import ManualFestivalEngine
-        fest_adj = ManualFestivalEngine.calculate_premium(start_dt, end_dt, rep_price)
+        if req.get("skip_festival", False):
+            fest_adj = {"adjustment_amount": 0.0, "reason": "Festival premium disabled by user."}
+        else:
+            fest_adj = ManualFestivalEngine.calculate_premium(start_dt, end_dt, rep_price)
         
         # 6. Demand Adjustment (Disabled per user request)
         demand_adj = {"adjustment_amount": 0.0, "reason": "Demand premium disabled by user."}
@@ -247,6 +252,35 @@ class PredictionEngine:
             is_festival=is_fest_bool
         )
         revenue_optimized_price = opt_res["revenue_optimized_price"]
+        
+        # 9.5 YOY FORWARD INFLATION PROJECTION (For future years like 2027)
+        import json
+        from app.config import DATA_DIR
+        try:
+            with open(DATA_DIR / "group_averages.json", "r") as f:
+                avg_dict = json.load(f)
+            max_year = avg_dict.get("max_year_in_data", 2026)
+            yoy_infl = avg_dict.get("global_yoy_inflation", 0.0)
+        except Exception:
+            max_year = 2026
+            yoy_infl = 0.0
+            
+        pred_year = start_dt.year
+        pred_month = start_dt.month
+        
+        # USER RULE: 0% inflation for Nov-Feb, 10% inflation for March-Oct
+        if pred_month in [11, 12, 1, 2]:
+            yoy_infl = 0.0
+            
+        if pred_year > max_year:
+            years_diff = pred_year - max_year
+            inflation_multiplier = (1.0 + yoy_infl) ** years_diff
+            final_price *= inflation_multiplier
+            revenue_optimized_price *= inflation_multiplier
+            
+        # Round final outputs
+        final_price = round(final_price, -1)
+        revenue_optimized_price = round(revenue_optimized_price, -1)
         
         # 9.5 Multi-Slot Consistency Guardrail (24H >= 12H)
         consistency_adj = 0.0
