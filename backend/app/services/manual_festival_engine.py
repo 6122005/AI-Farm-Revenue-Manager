@@ -53,27 +53,65 @@ class ManualFestivalEngine:
             return {}
             
     @classmethod
-    def calculate_premium(cls, booking_date_str: str, base_price: float) -> Dict[str, Any]:
+    def calculate_premium(cls, start_dt: datetime.datetime, end_dt: datetime.datetime, base_price: float) -> Dict[str, Any]:
         """
-        Reads Sheet4. If booking_date_str matches a festival date, applies the multiplier.
+        Reads Sheet4. Checks all dates from start_dt to end_dt. 
+        If any date matches a festival, applies the maximum multiplier found.
         """
         festivals = cls._load_festivals()
         
-        if booking_date_str in festivals:
-            fest_info = festivals[booking_date_str]
-            multiplier = fest_info["multiplier"]
+        current_date = start_dt.date()
+        end_date = end_dt.date()
+        
+        max_multiplier = 1.0
+        best_festival = None
+        
+        while current_date <= end_date:
+            date_str = current_date.strftime("%Y-%m-%d")
             
-            # If multiplier is 2.0, the adjustment is (2.0 - 1) * base_price = 1.0 * base_price
-            if multiplier > 1.0:
-                adjustment = base_price * (multiplier - 1.0)
-                reason = f"Date matches festival '{fest_info['name']}'. Applied custom multiplier of {multiplier}x from Excel."
-                return {
-                    "adjustment_amount": float(adjustment),
-                    "reason": reason
-                }
+            # If end_dt is exactly midnight, don't count the end_date unless it's also the start_date
+            if current_date == end_date and end_dt.hour == 0 and end_dt.minute == 0 and start_dt.date() != end_date:
+                break
                 
-        # If no match or multiplier <= 1.0, return 0
+            if date_str in festivals:
+                fest_info = festivals[date_str]
+                if fest_info["multiplier"] > max_multiplier:
+                    max_multiplier = fest_info["multiplier"]
+                    best_festival = fest_info
+                    
+            current_date += datetime.timedelta(days=1)
+            
+        if max_multiplier > 1.0 and best_festival:
+            adjustment = base_price * (max_multiplier - 1.0)
+            reason = f"Booking touches festival '{best_festival['name']}'. Applied custom multiplier of {max_multiplier}x from Excel."
+            return {
+                "adjustment_amount": float(adjustment),
+                "reason": reason
+            }
+                
         return {
             "adjustment_amount": 0.0,
             "reason": "Date is not listed as a festival in Excel, or no multiplier is set."
         }
+        
+    @classmethod
+    def is_festival_booking(cls, start_dt: datetime.datetime, end_dt: datetime.datetime) -> bool:
+        """
+        Returns True if the booking overlaps with any festival date.
+        """
+        festivals = cls._load_festivals()
+        current_date = start_dt.date()
+        end_date = end_dt.date()
+        
+        while current_date <= end_date:
+            date_str = current_date.strftime("%Y-%m-%d")
+            
+            if current_date == end_date and end_dt.hour == 0 and end_dt.minute == 0 and start_dt.date() != end_date:
+                break
+                
+            if date_str in festivals:
+                return True
+                
+            current_date += datetime.timedelta(days=1)
+            
+        return False

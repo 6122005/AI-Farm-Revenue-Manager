@@ -403,11 +403,6 @@ class FeatureEngineer:
             # Ensure month, year, is_weekend, selling_price, person_count are numeric and slot normalized
             df = df.copy()
             
-            # Exclude only specific outlier festivals from average calculation
-            if "festival_name" in df.columns:
-                excluded_fests = ["makar sankranti", "holi", "dhuleti"]
-                df = df[~df["festival_name"].astype(str).str.lower().str.strip().isin(excluded_fests)]
-                
             df["commercial_slot"] = df["commercial_slot"].apply(lambda s: slot_engine.normalize_commercial_slot(s))
             if "booking_date" in df.columns:
                 dt_s = pd.to_datetime(df["booking_date"], errors="coerce")
@@ -431,6 +426,8 @@ class FeatureEngineer:
 
             if "person_count" not in df.columns: df["person_count"] = 4
             else: df["person_count"] = pd.to_numeric(df["person_count"], errors="coerce").fillna(4).astype(int)
+
+
             
             # Normalize selling price based on domain duration rules (6-12h anchored to 12H, 13-25h anchored to 24H)
             if "duration_hours" not in df.columns: df["duration_hours"] = 24.0
@@ -480,6 +477,12 @@ class FeatureEngineer:
             df["base_selling_price"] = df["norm_selling_price"] - df["extra_guests"] * df["marginal_cost"]
 
 
+            # --- FESTIVAL EXCLUSION LOGIC ---
+            # Save the full dataset (with base_selling_price) for features that explicitly group by is_festival
+            df_full = df.copy()
+            # Do not consider ANY festival record for calculating general averages to avoid skewing normal prices
+            df = df[df["is_festival"] == 0]
+
 
             # 1. slot_month_weekend_avg & independent segment statistics (using base_selling_price)
             gp1 = df.groupby(["commercial_slot", "month", "is_weekend"])["base_selling_price"].mean().reset_index()
@@ -511,7 +514,7 @@ class FeatureEngineer:
                     avg_dict[key] = ratio
 
             # Learned Commercial Ratio Engine (24H vs 12H)
-            gp_slot = df.groupby(["month", "is_weekend", "is_festival", "commercial_slot"])["base_selling_price"].median().reset_index()
+            gp_slot = df_full.groupby(["month", "is_weekend", "is_festival", "commercial_slot"])["base_selling_price"].median().reset_index()
             # We need to map 24H -> 12H equivalents
             for (m_c, w_c, f_c), group in gp_slot.groupby(["month", "is_weekend", "is_festival"]):
                 prices = {row["commercial_slot"]: row["base_selling_price"] for _, row in group.iterrows()}
@@ -576,7 +579,7 @@ class FeatureEngineer:
                 avg_dict[key] = float(row["selling_price"])
                 
             # 3. slot_festival_avg
-            gp3 = df.groupby(["commercial_slot", "is_festival"])["selling_price"].mean().reset_index()
+            gp3 = df_full.groupby(["commercial_slot", "is_festival"])["selling_price"].mean().reset_index()
             for _, row in gp3.iterrows():
                 key = f"slot_festival_{row['commercial_slot']}_{int(row['is_festival'])}"
                 avg_dict[key] = float(row["selling_price"])
@@ -1131,21 +1134,28 @@ class FeatureEngineer:
     def compute_loo_group_metrics(
         cls, df: pd.DataFrame, group_cols: List[str], target_col: str, is_prediction: bool
     ) -> Tuple[np.ndarray, np.ndarray]:
-        gp = df.groupby(group_cols)[target_col].agg(["sum", "count"]).reset_index()
+        if "is_festival" not in group_cols and "is_festival" in df.columns:
+            base_df = df[df["is_festival"] == 0]
+        else:
+            base_df = df
+
+        gp = base_df.groupby(group_cols)[target_col].agg(["sum", "count"]).reset_index()
         # Preserve original index alignment
         merged = df[group_cols].reset_index().merge(gp, on=group_cols, how="left").set_index("index")
         
-        sum_val = merged.loc[df.index, "sum"].values
-        count_val = merged.loc[df.index, "count"].values
+        sum_val = merged.loc[df.index, "sum"].fillna(0).values
+        count_val = merged.loc[df.index, "count"].fillna(0).values
         y_val = df[target_col].values
+        
+        is_included = (df["is_festival"] == 0).values if ("is_festival" not in group_cols and "is_festival" in df.columns) else np.ones(len(df), dtype=bool)
         
         if is_prediction and "_is_prediction_row" in df.columns:
             is_pred_target = df["_is_prediction_row"].values.astype(bool)
-            adj_sum = np.where(is_pred_target, sum_val, sum_val - y_val)
-            adj_count = np.where(is_pred_target, count_val, count_val - 1)
+            adj_sum = np.where(is_pred_target, sum_val, np.where(is_included, sum_val - y_val, sum_val))
+            adj_count = np.where(is_pred_target, count_val, np.where(is_included, count_val - 1, count_val))
         else:
-            adj_sum = sum_val - y_val
-            adj_count = count_val - 1
+            adj_sum = np.where(is_included, sum_val - y_val, sum_val)
+            adj_count = np.where(is_included, count_val - 1, count_val)
             
         mean_val = np.where(adj_count > 0, adj_sum / adj_count, np.nan)
         return mean_val, adj_count
@@ -1154,21 +1164,28 @@ class FeatureEngineer:
     def compute_loo_hierarchical_mean(
         cls, df: pd.DataFrame, group_cols: List[str], fallback_col: str, target_col: str, is_prediction: bool
     ) -> pd.Series:
-        gp = df.groupby(group_cols)[target_col].agg(["sum", "count"]).reset_index()
+        if "is_festival" not in group_cols and "is_festival" in df.columns:
+            base_df = df[df["is_festival"] == 0]
+        else:
+            base_df = df
+
+        gp = base_df.groupby(group_cols)[target_col].agg(["sum", "count"]).reset_index()
         # Preserve original index alignment
         merged = df[group_cols].reset_index().merge(gp, on=group_cols, how="left").set_index("index")
         
-        sum_val = merged.loc[df.index, "sum"].values
-        count_val = merged.loc[df.index, "count"].values
+        sum_val = merged.loc[df.index, "sum"].fillna(0).values
+        count_val = merged.loc[df.index, "count"].fillna(0).values
         y_val = df[target_col].values
+        
+        is_included = (df["is_festival"] == 0).values if ("is_festival" not in group_cols and "is_festival" in df.columns) else np.ones(len(df), dtype=bool)
         
         if is_prediction and "_is_prediction_row" in df.columns:
             is_pred_target = df["_is_prediction_row"].values.astype(bool)
-            adj_sum = np.where(is_pred_target, sum_val, sum_val - y_val)
-            adj_count = np.where(is_pred_target, count_val, count_val - 1)
+            adj_sum = np.where(is_pred_target, sum_val, np.where(is_included, sum_val - y_val, sum_val))
+            adj_count = np.where(is_pred_target, count_val, np.where(is_included, count_val - 1, count_val))
         else:
-            adj_sum = sum_val - y_val
-            adj_count = count_val - 1
+            adj_sum = np.where(is_included, sum_val - y_val, sum_val)
+            adj_count = np.where(is_included, count_val - 1, count_val)
             
         mean_val = np.where(adj_count > 0, adj_sum / adj_count, np.nan)
         fallback_series = df[fallback_col].values

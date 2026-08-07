@@ -367,7 +367,11 @@ class DataPipeline:
         # 9. Extract Festival directly if present
         fest_col = next((c for c in df.columns if "festival" in str(c).lower()), None)
         if fest_col:
-            mapped_df["is_festival"] = df[fest_col].apply(lambda x: 1 if str(x).strip().upper() in ["1", "TRUE", "Y", "YES"] else 0)
+            def parse_fest(x):
+                val = str(x).strip()
+                if val in ["0", "0.0", "", "nan", "None"]: return 0
+                return 1
+            mapped_df["is_festival"] = df[fest_col].apply(parse_fest)
             
         # 10. Extract Season directly if present
         season_col = next((c for c in df.columns if "season" in str(c).lower()), None)
@@ -381,6 +385,28 @@ class DataPipeline:
 
         # Hierarchical Outlier Detection
         clean_df, outliers_df = cls.detect_and_flag_group_outliers(mapped_df)
+        
+        # --- START USER LOGIC: Shift August/September festivals into Weekends ---
+        def apply_shift(row):
+            try:
+                is_fest = int(row.get('is_festival', 0))
+                m = row.get('month', 0)
+                if pd.isna(m):
+                    try:
+                        m = pd.to_datetime(row['booking_date']).month
+                    except:
+                        m = 0
+                        
+                if m == 8 and is_fest == 1:
+                    return pd.Series({'is_festival': 0, 'is_weekend': 1})
+                return pd.Series({'is_festival': is_fest, 'is_weekend': row.get('is_weekend', 0)})
+            except Exception:
+                return pd.Series({'is_festival': row.get('is_festival', 0), 'is_weekend': row.get('is_weekend', 0)})
+                
+        shifted = clean_df.apply(apply_shift, axis=1)
+        clean_df['is_festival'] = shifted['is_festival']
+        clean_df['is_weekend'] = shifted['is_weekend']
+        # --- END USER LOGIC ---
         
         # Only use the strictly cleaned data for feature engineering and training
         FeatureEngineer.calculate_group_averages(clean_df)

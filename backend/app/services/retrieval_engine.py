@@ -110,6 +110,10 @@ class SimilarBookingRetriever:
         req_weekend = req.get('is_weekend', 0)
         req_season = slot_relationship_engine.get_season(req_month)
 
+        # Ensure base representative price never includes festival data to prevent skewing
+        if "is_festival" in df.columns:
+            df = df[df["is_festival"] == 0]
+
         candidates = pd.DataFrame()
         level_used = 0
         borrowing_metadata = None

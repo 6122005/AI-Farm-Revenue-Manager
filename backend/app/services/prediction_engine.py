@@ -1,5 +1,6 @@
 import pandas as pd
 import numpy as np
+import os
 import joblib
 from datetime import datetime
 import xgboost as xgb
@@ -106,8 +107,22 @@ class PredictionEngine:
             return pd.DataFrame()
             
         try:
+            from pathlib import Path
+            path = Path("/Users/darshankanani/AI-Farm-Revenue-Manager/backend/data/Farm_Booking_Data_new.xlsx")
             from app.services.data_pipeline import DataPipeline
             df = DataPipeline.load_and_process_file(path)
+            
+            from app.services.festival_engine import festival_engine
+            def get_is_fest(row):
+                if pd.notna(row.get('booking_date')):
+                    try:
+                        d_str = row['booking_date'].strftime("%Y-%m-%d") if hasattr(row['booking_date'], 'strftime') else str(row['booking_date']).split(" ")[0]
+                        return 1 if festival_engine.get_festival_features(d_str)['is_festival'] else 0
+                    except:
+                        return 0
+                return 0
+            df['is_festival'] = df.apply(get_is_fest, axis=1)
+            
             self._clean_data_cache = df
             return df
         except Exception as e:
@@ -173,8 +188,7 @@ class PredictionEngine:
         
         # 5. Festival Adjustment (New Manual Excel Engine)
         from app.services.manual_festival_engine import ManualFestivalEngine
-        booking_date_str = start_dt.strftime("%Y-%m-%d")
-        fest_adj = ManualFestivalEngine.calculate_premium(booking_date_str, rep_price)
+        fest_adj = ManualFestivalEngine.calculate_premium(start_dt, end_dt, rep_price)
         
         # 6. Demand Adjustment (Disabled per user request)
         demand_adj = {"adjustment_amount": 0.0, "reason": "Demand premium disabled by user."}
