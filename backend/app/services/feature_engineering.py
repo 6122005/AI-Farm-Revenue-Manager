@@ -194,7 +194,7 @@ class BusinessInsightDiscoverer:
                 for f_name, group in fest_rows.groupby("festival_name"):
                     count = len(group)
                     avg_p = float(group[p_col].mean())
-                    med_p = float(group[p_col].median())
+                    med_p = float(group[p_col].mean())
                     std_p = float(group[p_col].std()) if count > 1 else 0.0
                     
                     prem_avg = round(avg_p / non_fest_mean, 3) if non_fest_mean > 0 else 1.0
@@ -213,10 +213,10 @@ class BusinessInsightDiscoverer:
                     fest_profile[str(f_name)] = {
                         "historical_sample_count": count,
                         "average_price": round(avg_p, 2),
-                        "median_price": round(med_p, 2),
+                        "mean_price": round(med_p, 2),
                         "std_price": round(std_p, 2),
                         "average_premium": prem_avg,
-                        "median_premium": prem_med,
+                        "mean_premium": prem_med,
                         "confidence_score": confidence,
                         "peak_duration": round(dur_mean, 1),
                         "weekend_interaction": wk_interaction
@@ -485,7 +485,7 @@ class FeatureEngineer:
 
             # --- YOY INFLATION & TIME DECAY LOGIC ---
             max_year = df["year"].max() if not df.empty else 2026
-            yearly_medians = df.groupby("year")["base_selling_price"].median()
+            yearly_medians = df.groupby("year")["base_selling_price"].mean()
             valid_years = sorted([y for y in yearly_medians.index if y >= 2023])
             
             inflation_rates = []
@@ -517,9 +517,9 @@ class FeatureEngineer:
                     return np.mean(group["cmv_base_price"])
                 return np.average(group["cmv_base_price"], weights=weights)
 
-            def time_decay_median(group):
+            def time_decay_mean(group):
                 # Fallback to simple median for now as weighted median is complex
-                return np.median(group["cmv_base_price"])
+                return np.mean(group["cmv_base_price"])
 
             # 1. slot_month_weekend_avg & independent segment statistics (using cmv_base_price + time decay)
             gp1 = df.groupby(["commercial_slot", "month", "is_weekend"]).apply(time_decay_mean).reset_index(name="cmv_base_price")
@@ -549,7 +549,7 @@ class FeatureEngineer:
                     avg_dict[key] = ratio
 
             # Learned Commercial Ratio Engine (24H vs 12H)
-            gp_slot = df_full.groupby(["month", "is_weekend", "is_festival", "commercial_slot"])["cmv_base_price"].median().reset_index()
+            gp_slot = df_full.groupby(["month", "is_weekend", "is_festival", "commercial_slot"])["cmv_base_price"].mean().reset_index()
             for (m_c, w_c, f_c), group in gp_slot.groupby(["month", "is_weekend", "is_festival"]):
                 prices = {row["commercial_slot"]: row["cmv_base_price"] for _, row in group.iterrows()}
                 for c_slot, c_price in prices.items():
@@ -563,7 +563,7 @@ class FeatureEngineer:
             gp_stats = df.groupby(["commercial_slot", "month", "is_weekend"]).apply(
                 lambda g: pd.Series({
                     "mean": time_decay_mean(g),
-                    "median": np.median(g["cmv_base_price"]),
+                    "mean": np.mean(g["cmv_base_price"]),
                     "std": np.std(g["cmv_base_price"]) if len(g) > 1 else 0.0,
                     "count": float(len(g)),
                     "p25": np.percentile(g["cmv_base_price"], 25) if len(g) > 0 else 0.0,
@@ -581,7 +581,7 @@ class FeatureEngineer:
                 for s_key in set([slot_c, slot_norm]):
                     prefix = f"seg_{s_key}_{m_c}_{w_c}"
                     avg_dict[f"{prefix}_mean"] = float(row["mean"])
-                    avg_dict[f"{prefix}_median"] = float(row["median"])
+                    avg_dict[f"{prefix}_mean"] = float(row["mean"])
                     avg_dict[f"{prefix}_std"] = float(row["std"]) if pd.notna(row["std"]) else 0.0
                     avg_dict[f"{prefix}_count"] = float(cnt)
                     avg_dict[f"{prefix}_confidence"] = float(min(1.0, cnt / 5.0))
@@ -593,11 +593,11 @@ class FeatureEngineer:
                 slot_norm = slot_engine.normalize_commercial_slot(slot_c)
                 prices = grp["cmv_base_price"].sort_values().values
                 t_mean = time_decay_mean(grp)
-                w_med = float(np.median(prices))
+                w_med = float(np.mean(prices))
                 for s_key in set([str(slot_c), slot_norm]):
                     prefix = f"seg_{s_key}_{int(m_c)}_{int(w_c)}"
                     avg_dict[f"{prefix}_trimmed_mean"] = t_mean
-                    avg_dict[f"{prefix}_weighted_median"] = w_med
+                    avg_dict[f"{prefix}_weighted_mean"] = w_med
                     
             # 2. slot_weekend_avg
             gp2 = df.groupby(["commercial_slot", "is_weekend"])["selling_price"].mean().reset_index()
@@ -895,9 +895,9 @@ class FeatureEngineer:
         prefix = f"seg_{slot_type}_{month}_{is_weekend}"
 
         segment_mean = avg_dict.get(f"{prefix}_mean", 8500.0)
-        segment_median = avg_dict.get(f"{prefix}_median", 8500.0)
+        segment_mean = avg_dict.get(f"{prefix}_mean", 8500.0)
         segment_trimmed_mean = avg_dict.get(f"{prefix}_trimmed_mean", segment_mean)
-        segment_weighted_median = avg_dict.get(f"{prefix}_weighted_median", segment_median)
+        segment_weighted_mean = avg_dict.get(f"{prefix}_weighted_mean", segment_mean)
         segment_std = avg_dict.get(f"{prefix}_std", 0.0)
         segment_count = avg_dict.get(f"{prefix}_count", 0.0)
         segment_confidence = avg_dict.get(f"{prefix}_confidence", 0.5)
@@ -1112,9 +1112,9 @@ class FeatureEngineer:
             "slot_month_weekend_ratio": slot_month_weekend_ratio,
             "slot_month_weekend_diff": slot_month_weekend_diff,
             "segment_mean": segment_mean,
-            "segment_median": segment_median,
+            "segment_mean": segment_mean,
             "segment_trimmed_mean": segment_trimmed_mean,
-            "segment_weighted_median": segment_weighted_median,
+            "segment_weighted_mean": segment_weighted_mean,
             "segment_std": segment_std,
             "segment_count": segment_count,
             "segment_confidence": segment_confidence,
@@ -1482,10 +1482,10 @@ class FeatureEngineer:
             if 'booking_date' in ref_df.columns:
                 ref_df['booking_date'] = pd.to_datetime(ref_df['booking_date'])
             ref_df = ref_df.sort_values('booking_date')
-            global_median = ref_df['selling_price'].median()
+            global_mean = ref_df['selling_price'].mean()
         else:
             ref_df = pd.DataFrame()
-            global_median = 8500.0
+            global_mean = 8500.0
 
         if 'booking_date' in combined_df.columns:
             combined_df['booking_date_dt'] = pd.to_datetime(combined_df['booking_date'])
@@ -1514,9 +1514,9 @@ class FeatureEngineer:
                 else:
                     # Fallback to historical expanding median to prevent target leakage
                     if len(past_bookings) > 0:
-                        momentum_col.append(past_bookings['selling_price'].median())
+                        momentum_col.append(past_bookings['selling_price'].mean())
                     else:
-                        momentum_col.append(global_median)
+                        momentum_col.append(global_mean)
                         
                 if len(sim_past) > 1:
                     variance_col.append(sim_past['selling_price'].std())
@@ -1524,7 +1524,7 @@ class FeatureEngineer:
                     variance_col.append(0)
             else:
                 density_col.append(0)
-                momentum_col.append(global_median)
+                momentum_col.append(global_mean)
                 variance_col.append(0)
 
         combined_df['similar_booking_density_30d'] = density_col

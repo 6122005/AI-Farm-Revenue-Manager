@@ -47,14 +47,14 @@ class IntelligentSlotSimilarityEngine:
         df = pd.concat(cleaned_dfs)
 
         def build_ratios(df_slice):
-            medians = df_slice.groupby('norm_slot')['selling_price'].median()
+            means = df_slice.groupby('norm_slot')['selling_price'].mean()
             slots = ["12H Day", "12H Night", "24H Day", "24H Night"]
             ratios = {}
             for target in slots:
                 ratios[target] = {}
                 for source in slots:
-                    if target in medians and source in medians and medians[source] > 0:
-                        ratios[target][source] = float(medians[target] / medians[source])
+                    if target in means and source in means and means[source] > 0:
+                        ratios[target][source] = float(means[target] / means[source])
             return ratios
 
         global_ratios = build_ratios(df)

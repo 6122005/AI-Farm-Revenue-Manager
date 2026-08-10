@@ -1,0 +1,73 @@
+
+==================================================
+FEB 12H DAY WEEKEND
+==================================================
+📖 [DATA PIPELINE] Loaded Excel sheet 'Events Export' (763 rows) from Farm_Booking_Data_new.xlsx
+🔍 [AUTO DETECT] Auto-detected columns in 'Farm_Booking_Data_new.xlsx': price='Rate', date='Start Date', slot='Booking Category'
+📖 [DATA PIPELINE] Loaded Excel sheet 'Events Export' (763 rows) from Farm_Booking_Data_new.xlsx
+🎉 [WEEKEND INTELLIGENCE] Discovered 4 official weekend slots out of 56 combinations.
+📊 [FEATURE ENGINEERING] Saved 1581 group averages to group_averages.json
+📊 [INSIGHT DISCOVERY] Automatically discovered and saved business insights: ['highest_revenue_weekday', 'highest_revenue_month', 'most_booked_slot', 'least_booked_slot', 'weekend_premium_ratio', 'summer_demand_ratio', 'winter_demand_ratio', 'rain_impact_ratio', 'advance_booking_ratio', 'average_occupancy']
+⚠️ Error discovering festival intelligence: 'festival_name'
+📖 [DATA PIPELINE] Loaded Excel sheet 'Events Export' (763 rows) from Farm_Booking_Data_new.xlsx
+🔍 [AUTO DETECT] Auto-detected columns in 'Farm_Booking_Data_new.xlsx': price='Rate', date='Start Date', slot='Booking Category'
+📖 [DATA PIPELINE] Loaded Excel sheet 'Events Export' (763 rows) from Farm_Booking_Data_new.xlsx
+🎉 [WEEKEND INTELLIGENCE] Discovered 4 official weekend slots out of 56 combinations.
+📊 [FEATURE ENGINEERING] Saved 1581 group averages to group_averages.json
+📊 [INSIGHT DISCOVERY] Automatically discovered and saved business insights: ['highest_revenue_weekday', 'highest_revenue_month', 'most_booked_slot', 'least_booked_slot', 'weekend_premium_ratio', 'summer_demand_ratio', 'winter_demand_ratio', 'rain_impact_ratio', 'advance_booking_ratio', 'average_occupancy']
+⚠️ Error discovering festival intelligence: 'festival_name'
+Final Price: 4060.0
+Base Historical Median: 3850.0000000000005
+Historical Bookings Used:
+  - Date: 2024-02-03, Slot: 12H Night, Guests: 10, Price: 2727.272727272727
+  - Date: 2024-01-13, Slot: 12H Night, Guests: 6, Price: 4090.909090909091
+  - Date: 2024-01-06, Slot: 12H Night, Guests: 4, Price: 2727.272727272727
+Fallback Info: {'requested_combination': 'Feb Weekend 12H Day', 'fallback_level_used': 4, 'historical_records_used': 3, 'conversion_ratio_used': 0.9090909090909091, 'historical_source_slot': '12H Night', 'final_predicted_price': 4060.0, 'confidence': 31.8, 'reason_for_fallback': 'Learned monthly conversion ratio (0.91x)'}
+
+==================================================
+MAR 12H DAY WEEKEND
+==================================================
+Final Price: 4750.0
+Base Historical Median: 4750.307692307692
+Historical Bookings Used:
+  - Date: 2024-03-16, Slot: 24H Night, Guests: 10, Price: 3300.0000000000005
+  - Date: 2025-03-22, Slot: 24H Night, Guests: 10, Price: 5225.0
+  - Date: 2026-03-07, Slot: 24H Night, Guests: 10, Price: 3850.0000000000005
+  - Date: 2024-03-09, Slot: 24H Night, Guests: 8, Price: 3025.0000000000005
+  - Date: 2025-03-08, Slot: 24H Night, Guests: 11, Price: 3850.0000000000005
+  - Date: 2025-03-15, Slot: 24H Night, Guests: 8, Price: 4125.0
+  - Date: 2026-03-28, Slot: 24H Night, Guests: 11, Price: 5500.0
+  - Date: 2024-03-02, Slot: 24H Night, Guests: 5, Price: 3025.0000000000005
+  - Date: 2024-03-23, Slot: 24H Night, Guests: 13, Price: 4950.0
+  - Date: 2024-03-30, Slot: 24H Night, Guests: 10, Price: 3850.0000000000005
+  - Date: 2025-03-29, Slot: 24H Night, Guests: 15, Price: 5225.0
+  - Date: 2026-03-21, Slot: 24H Night, Guests: 14, Price: 5500.0
+  - Date: 2026-03-14, Slot: 24H Night, Guests: 16, Price: 4675.0
+Fallback Info: {'requested_combination': 'Mar Weekend 12H Day', 'fallback_level_used': 2, 'historical_records_used': 13, 'conversion_ratio_used': 0.55, 'historical_source_slot': '24H Night', 'final_predicted_price': 4750.0, 'confidence': 76.8, 'reason_for_fallback': 'Learned monthly conversion ratio (0.55x)'}
+
+==================================================
+NOV 24H NIGHT WEEKEND
+==================================================
+Final Price: 6440.0
+Base Historical Median: 6444.166666666668
+Historical Bookings Used:
+  - Date: 2024-11-02, Slot: 24H Night, Guests: 8, Price: 6500.0
+  - Date: 2025-11-01, Slot: 24H Night, Guests: 12, Price: 6000.0
+  - Date: 2024-11-23, Slot: 24H Night, Guests: 6, Price: 5000.0
+  - Date: 2025-11-08, Slot: 24H Night, Guests: 15, Price: 5500.0
+  - Date: 2025-11-22, Slot: 24H Night, Guests: 18, Price: 5500.0
+  - Date: 2024-11-09, Slot: 24H Night, Guests: 15, Price: 5000.0
+Fallback Info: {'requested_combination': 'Nov Weekend 24H Night', 'fallback_level_used': 1, 'historical_records_used': 6, 'conversion_ratio_used': 1.0, 'historical_source_slot': '24H Night', 'final_predicted_price': 6440.0, 'confidence': 89.5, 'reason_for_fallback': 'Direct historical match'}
+
+==================================================
+DEC 24H NIGHT WEEKDAY
+==================================================
+Final Price: 4930.0
+Base Historical Median: 4734.125000000002
+Historical Bookings Used:
+  - Date: 2024-12-05, Slot: 24H Night, Guests: 8, Price: 4000.0
+  - Date: 2024-12-31, Slot: 24H Night, Guests: 8, Price: 4000.0
+  - Date: 2025-12-09, Slot: 24H Night, Guests: 9, Price: 3500.0
+  - Date: 2024-12-06, Slot: 24H Night, Guests: 5, Price: 3800.0
+  - Date: 2023-12-01, Slot: 24H Night, Guests: 4, Price: 3500.0
+Fallback Info: {'requested_combination': 'Dec Weekday 24H Night', 'fallback_level_used': 1, 'historical_records_used': 5, 'conversion_ratio_used': 1.0, 'historical_source_slot': '24H Night', 'final_predicted_price': 4930.0, 'confidence': 87.5, 'reason_for_fallback': 'Direct historical match'}

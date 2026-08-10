@@ -2,11 +2,11 @@
   "highest_revenue_weekday": 5,
   "highest_revenue_month": 5,
   "most_booked_slot": "24H Night",
-  "least_booked_slot": "Couple Full Day",
-  "weekend_premium_ratio": 1.917,
+  "least_booked_slot": "Couple Extended Day",
+  "weekend_premium_ratio": 1.826,
   "summer_demand_ratio": 1.2,
   "winter_demand_ratio": 1.067,
   "rain_impact_ratio": 0.8,
-  "advance_booking_ratio": 1.794,
+  "advance_booking_ratio": 1.818,
   "average_occupancy": 0.65
 }

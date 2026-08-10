@@ -1,5 +1,140 @@
 [
   {
+    "version_id": "20260810_103349",
+    "champion_name": "ExtraTrees",
+    "promoted": true,
+    "metrics": {
+      "r2": 0.9658131705248262,
+      "mae": 144.5913726969525,
+      "rmse": 504.2428288997957,
+      "mape": 2.9940785771518725,
+      "prediction_interval_coverage": 89.91150442477877,
+      "validation_strategy": "TimeSeriesSplit(n_splits=5)",
+      "feature_importances": {
+        "duration_hours": 0.2967823277391919,
+        "effective_daily_rate": 0.29122634230106087,
+        "commercial_units": 0.2510247345819945,
+        "rolling_price_mean_30": 0.05024217132203448,
+        "month_weekend_slot_avg": 0.028379430062008083,
+        "is_long_weekend": 0.019639922001066314,
+        "is_couple": 0.0173444911866726,
+        "is_peak_season": 0.015071353166840723,
+        "person_count": 0.005123420887323001,
+        "demand_score": 0.003750901774717263
+      }
+    },
+    "trained_at": "2026-08-10T10:34:20.340507",
+    "artifact_path": "/Users/darshankanani/AI-Farm-Revenue-Manager/backend/models_store/version_history/model_20260810_103349.joblib"
+  },
+  {
+    "version_id": "20260810_102655",
+    "champion_name": "XGBoost",
+    "promoted": true,
+    "metrics": {
+      "r2": 0.9665491750046407,
+      "mae": 149.08099159983408,
+      "rmse": 498.7854018820303,
+      "mape": 3.22178715720323,
+      "prediction_interval_coverage": 89.91150442477877,
+      "validation_strategy": "TimeSeriesSplit(n_splits=5)",
+      "feature_importances": {
+        "rolling_price_mean_30": 0.4013105630874634,
+        "duration_hours": 0.3040430247783661,
+        "effective_daily_rate": 0.07506489753723145,
+        "commercial_units": 0.07421212643384933,
+        "month_4": 0.048074621707201004,
+        "month_weekend_slot_avg": 0.03995075821876526,
+        "is_peak_season": 0.013386653736233711,
+        "slot_utilization_ratio": 0.010864865966141224,
+        "demand_index": 0.0066885557025671005,
+        "month_festival_slot_avg": 0.005982091650366783
+      }
+    },
+    "trained_at": "2026-08-10T10:27:27.190553",
+    "artifact_path": "/Users/darshankanani/AI-Farm-Revenue-Manager/backend/models_store/version_history/model_20260810_102655.joblib"
+  },
+  {
+    "version_id": "20260810_100001",
+    "champion_name": "XGBoost",
+    "promoted": true,
+    "metrics": {
+      "r2": 0.9665491750046407,
+      "mae": 149.08099159983408,
+      "rmse": 498.7854018820303,
+      "mape": 3.22178715720323,
+      "prediction_interval_coverage": 89.91150442477877,
+      "validation_strategy": "TimeSeriesSplit(n_splits=5)",
+      "feature_importances": {
+        "rolling_price_mean_30": 0.4013105630874634,
+        "duration_hours": 0.3040430247783661,
+        "effective_daily_rate": 0.07506489753723145,
+        "commercial_units": 0.07421212643384933,
+        "month_4": 0.048074621707201004,
+        "month_weekend_slot_avg": 0.03995075821876526,
+        "is_peak_season": 0.013386653736233711,
+        "slot_utilization_ratio": 0.010864865966141224,
+        "demand_index": 0.0066885557025671005,
+        "month_festival_slot_avg": 0.005982091650366783
+      }
+    },
+    "trained_at": "2026-08-10T10:00:32.652072",
+    "artifact_path": "/Users/darshankanani/AI-Farm-Revenue-Manager/backend/models_store/version_history/model_20260810_100001.joblib"
+  },
+  {
+    "version_id": "20260810_093022",
+    "champion_name": "XGBoost",
+    "promoted": true,
+    "metrics": {
+      "r2": 0.9665491750046407,
+      "mae": 149.08099159983408,
+      "rmse": 498.7854018820303,
+      "mape": 3.22178715720323,
+      "prediction_interval_coverage": 89.91150442477877,
+      "validation_strategy": "TimeSeriesSplit(n_splits=5)",
+      "feature_importances": {
+        "rolling_price_mean_30": 0.4013105630874634,
+        "duration_hours": 0.3040430247783661,
+        "effective_daily_rate": 0.07506489753723145,
+        "commercial_units": 0.07421212643384933,
+        "month_4": 0.048074621707201004,
+        "month_weekend_slot_avg": 0.03995075821876526,
+        "is_peak_season": 0.013386653736233711,
+        "slot_utilization_ratio": 0.010864865966141224,
+        "demand_index": 0.0066885557025671005,
+        "month_festival_slot_avg": 0.005982091650366783
+      }
+    },
+    "trained_at": "2026-08-10T09:30:53.872242",
+    "artifact_path": "/Users/darshankanani/AI-Farm-Revenue-Manager/backend/models_store/version_history/model_20260810_093022.joblib"
+  },
+  {
+    "version_id": "20260810_092924",
+    "champion_name": "XGBoost",
+    "promoted": false,
+    "metrics": {
+      "r2": 0.9665491750046407,
+      "mae": 149.08099159983408,
+      "rmse": 498.7854018820303,
+      "mape": 3.22178715720323,
+      "prediction_interval_coverage": 89.91150442477877,
+      "validation_strategy": "TimeSeriesSplit(n_splits=5)",
+      "feature_importances": {
+        "rolling_price_mean_30": 0.4013105630874634,
+        "duration_hours": 0.3040430247783661,
+        "effective_daily_rate": 0.07506489753723145,
+        "commercial_units": 0.07421212643384933,
+        "month_4": 0.048074621707201004,
+        "month_weekend_slot_avg": 0.03995075821876526,
+        "is_peak_season": 0.013386653736233711,
+        "slot_utilization_ratio": 0.010864865966141224,
+        "demand_index": 0.0066885557025671005,
+        "month_festival_slot_avg": 0.005982091650366783
+      }
+    },
+    "trained_at": "2026-08-10T09:29:55.277218",
+    "artifact_path": "/Users/darshankanani/AI-Farm-Revenue-Manager/backend/models_store/version_history/model_20260810_092924.joblib"
+  },
+  {
     "version_id": "20260807_100244",
     "champion_name": "ExtraTrees",
     "promoted": false,

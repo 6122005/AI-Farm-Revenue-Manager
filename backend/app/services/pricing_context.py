@@ -25,14 +25,14 @@ class PricingContext:
     def booking_count(self) -> int:
         return self.stats.get("booking_count", 0)
         
-    def get_segment_median(self, df_subset: pd.DataFrame) -> float:
+    def get_segment_mean(self, df_subset: pd.DataFrame) -> float:
         if df_subset.empty:
             return self.base_price
         prices = df_subset['selling_price'].values
         if len(prices) > 2:
-            med = np.median(prices)
-            mad = np.median(np.abs(prices - med))
+            mean_val = np.mean(prices)
+            mad = np.mean(np.abs(prices - mean_val))
             if mad > 0:
-                is_outlier = np.abs(prices - med) > (3 * mad)
+                is_outlier = np.abs(prices - mean_val) > (3 * mad)
                 prices = prices[~is_outlier]
-        return float(np.median(prices)) if len(prices) > 0 else self.base_price
+        return float(np.mean(prices)) if len(prices) > 0 else self.base_price

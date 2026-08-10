@@ -71,7 +71,7 @@ class SimilarBookingRetriever:
         if df_subset.empty:
             return {
                 "booking_count": 0,
-                "median": 0.0,
+                "mean": 0.0,
                 "trimmed_mean": 0.0,
                 "variance": 0.0,
                 "mad": 0.0,
@@ -84,15 +84,15 @@ class SimilarBookingRetriever:
             prices = df_subset['selling_price'].values
             
         booking_count = len(prices)
-        median_price = np.median(prices)
+        mean_price = np.mean(prices)
         
-        mad = np.median(np.abs(prices - median_price))
+        mad = np.mean(np.abs(prices - mean_price))
         variance = np.var(prices) if booking_count > 1 else 0.0
         
         if booking_count > 2 and mad > 0:
-            is_outlier = np.abs(prices - median_price) > (3 * mad)
+            is_outlier = np.abs(prices - mean_price) > (3 * mad)
             trimmed_prices = prices[~is_outlier]
-            trimmed_mean = np.mean(trimmed_prices) if len(trimmed_prices) > 0 else median_price
+            trimmed_mean = np.mean(trimmed_prices) if len(trimmed_prices) > 0 else mean_price
         else:
             trimmed_mean = np.mean(prices)
             
@@ -100,7 +100,7 @@ class SimilarBookingRetriever:
             
         return {
             "booking_count": booking_count,
-            "median": float(median_price),
+            "mean": float(mean_price),
             "trimmed_mean": float(trimmed_mean),
             "variance": float(variance),
             "mad": float(mad),
@@ -208,7 +208,7 @@ class SimilarBookingRetriever:
         top_20 = candidates.head(20).copy()
         
         stats = cls.calculate_representative_price(top_20)
-        stats['representative_price'] = stats.get('trimmed_mean', stats.get('median', 8500.0))
+        stats['representative_price'] = stats.get('trimmed_mean', stats.get('mean', 8500.0))
         stats['level_used'] = level_used
         
         # Dynamic Confidence Score Redesign
