@@ -32,13 +32,16 @@ class ManualFestivalEngine:
                         dt_obj = pd.to_datetime(row['Date'])
                         date_str = dt_obj.strftime("%Y-%m-%d")
                         
-                        # Get multiplier (default to 1.0 if not found)
-                        multiplier = float(row.get('multiplier', 1.0))
-                        if pd.isna(multiplier):
-                            multiplier = 1.0
+                        # Get multiplier case-insensitively
+                        mult_col = next((c for c in row.keys() if str(c).lower() == 'multiplier'), None)
+                        multiplier = float(row[mult_col]) if mult_col and pd.notna(row[mult_col]) else 1.0
+                        
+                        # Get name case-insensitively
+                        name_col = next((c for c in row.keys() if 'name' in str(c).lower() or 'festival' in str(c).lower()), None)
+                        name = str(row[name_col]) if name_col and pd.notna(row[name_col]) else "Holiday"
                             
                         festivals[date_str] = {
-                            "name": str(row.get('Festival_Name', 'Holiday')),
+                            "name": name,
                             "multiplier": multiplier
                         }
                 except Exception as e:

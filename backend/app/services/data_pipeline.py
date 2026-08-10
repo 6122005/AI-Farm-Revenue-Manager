@@ -225,6 +225,23 @@ class DataPipeline:
         if date_col not in df.columns:
             raise ValueError(f"Selected date column '{date_col}' not found in uploaded file.")
         mapped_df["booking_date"] = pd.to_datetime(df[date_col], errors="coerce").dt.strftime("%Y-%m-%d")
+        
+        # Extract full start_datetime
+        start_t_col = next((c for c in df.columns if "start time" in str(c).lower() or "checkin_time" in str(c).lower()), None)
+        def _get_full_dt(row):
+            d_str = str(row.get(date_col, ""))
+            t_str = str(row.get(start_t_col, "00:00:00")) if start_t_col else "00:00:00"
+            try:
+                # If date_col already has time, it will be parsed
+                dt_obj = pd.to_datetime(d_str)
+                if dt_obj.hour == 0 and start_t_col:
+                    t_obj = pd.to_datetime(t_str, errors="coerce")
+                    if not pd.isna(t_obj):
+                        dt_obj = dt_obj.replace(hour=t_obj.hour, minute=t_obj.minute)
+                return dt_obj
+            except:
+                return pd.NaT
+        mapped_df["start_datetime"] = df.apply(_get_full_dt, axis=1)
         mapped_df["booking_date"] = mapped_df["booking_date"].fillna(date.today().strftime("%Y-%m-%d"))
 
         # 3. Guest Count and Couple Determination (Step 3 Rule)
@@ -363,6 +380,11 @@ class DataPipeline:
         wknd_col = next((c for c in df.columns if "weekend" in str(c).lower()), None)
         if wknd_col:
             mapped_df["is_weekend"] = df[wknd_col].apply(lambda x: 1 if str(x).strip().upper() in ["1", "TRUE", "Y", "YES"] else 0)
+        else:
+            from app.services.slot_engine import slot_engine
+            def _fallback_weekend(r):
+                return slot_engine.classify_weekend(r.get("start_datetime"), r.get("slot_type"))
+            mapped_df["is_weekend"] = mapped_df.apply(_fallback_weekend, axis=1)
 
         # 9. Extract Festival directly if present
         fest_col = next((c for c in df.columns if "festival" in str(c).lower()), None)
@@ -520,18 +542,6 @@ class DataPipeline:
         df_temp["booking_date_dt"] = pd.to_datetime(df_temp["booking_date"], errors="coerce")
         df_temp["month"] = df_temp["booking_date_dt"].dt.month.fillna(8).astype(int)
         
-        if "is_weekend" not in df_temp.columns or df_temp["is_weekend"].isna().all() or (df_temp["is_weekend"] == 0).all():
-            def _compute_business_weekend_df(r):
-                day = r["booking_date_dt"].dayofweek
-                slot = str(r.get("slot_type", ""))
-                # User specifically requested: Saturday Day, Saturday Night, Sunday Day ONLY.
-                # Friday Night is explicitly excluded.
-                if day == 5: return 1 # Saturday Day and Night
-                if day == 6 and "Day" in slot: return 1 # Sunday Day
-                return 0
-                
-            df_temp["is_weekend"] = df_temp.apply(_compute_business_weekend_df, axis=1)
-
         # Pre-compute segments
         df_temp['segment_strict'] = df_temp['month'].astype(str) + "_" + df_temp['is_weekend'].astype(str) + "_" + df_temp['slot_type']
         df_temp['segment_month_slot'] = df_temp['month'].astype(str) + "_" + df_temp['slot_type']
@@ -593,8 +603,8 @@ class DataPipeline:
         df_temp['outlier_reason'] = outlier_reasons
         df_temp['is_global_outlier'] = df_temp['outlier_score'] >= 2
         
-        # --- START USER LOGIC: Drop very low priced records (<= 1000) ---
-        df_temp = df_temp[df_temp["selling_price"] > 1000]
+        # --- START USER LOGIC: Drop very low priced records (< 1500) ---
+        df_temp = df_temp[df_temp["selling_price"] >= 1500]
         # Additional Rule: Drop 24H Night records with rent <= 3000
         mask_24h_night_low = (df_temp["slot_type"].astype(str).str.upper().str.contains("24H NIGHT")) & (df_temp["selling_price"] <= 3000)
         df_temp = df_temp[~mask_24h_night_low]

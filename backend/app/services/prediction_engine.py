@@ -142,16 +142,8 @@ class PredictionEngine:
         month_val = start_dt.month
         
         # Rule 2: Official Business Logic for Weekend (NO WEEKDAY CALENDAR CHECKS)
-        day_of_week = start_dt.weekday()
-        is_weekend_val = 0
-        
-        # User defined weekend:
-        # Saturday Day (12H/24H) & Saturday Night (12H/24H)
-        # Sunday Day (12H/24H)
-        if day_of_week == 5:
-            is_weekend_val = 1
-        elif day_of_week == 6 and "Day" in commercial_slot:
-            is_weekend_val = 1
+        from app.services.slot_engine import slot_engine
+        is_weekend_val = slot_engine.classify_weekend(start_dt, commercial_slot)
             
         duration_hours = (end_dt - start_dt).total_seconds() / 3600.0
         season = 'winter' if month_val in [11,12,1,2] else 'summer' if month_val in [3,4,5,6] else 'monsoon'
@@ -213,8 +205,13 @@ class PredictionEngine:
             "is_weekend": is_weekend_val
         }
         features = FeatureEngineer.extract_features_from_dict(raw_row)
-        features["lead_days"] = lead_days
-        features["person_count"] = person_count
+        # Freeze lead_days to 5 for the ML Model so it doesn't try to apply its own learned discounts on top of the explicit business rule.
+        features["lead_days"] = 5
+        
+        # Freeze person_count to the historical average for this segment so the ML model DOES NOT 
+        # apply any "small group discount" or "extra guest premium" (which is handled explicitly by Guest Engine).
+        anchor_guests = int(context.retrieved_segment['person_count'].mean()) if not context.retrieved_segment.empty else 15
+        features["person_count"] = anchor_guests
         features["duration_hours"] = duration_hours
         
         features["segment_representative_price"] = rep_price
@@ -231,11 +228,10 @@ class PredictionEngine:
                 
         ml_predicted = self._predict_single_slot(features, commercial_slot, self.model_artifact)
         
-        # Strict Rule: ML Calibration Max ±10%
-        calibration = ml_predicted - rep_price
-        max_shift = rep_price * 0.10
-        if calibration > max_shift: calibration = max_shift
-        elif calibration < -max_shift: calibration = -max_shift
+        # Strict Rule: ML Calibration Max ±10% (REMOVED PER USER REQUEST)
+        # We disable ML calibration entirely because XGBoost predicts un-inflated 2024 prices
+        # and applies unwanted discounts. The user requested strict rule-based pricing.
+        calibration = 0.0
         
         # 9. Final Fair Market Price
         final_price = rep_price + guest_adj["adjustment_amount"] + lead_adj["adjustment_amount"] + fest_adj["adjustment_amount"] + demand_adj["adjustment_amount"] + weather_adj["adjustment_amount"] + calibration
@@ -253,30 +249,9 @@ class PredictionEngine:
         )
         revenue_optimized_price = opt_res["revenue_optimized_price"]
         
-        # 9.5 YOY FORWARD INFLATION PROJECTION (For future years like 2027)
-        import json
-        from app.config import DATA_DIR
-        try:
-            with open(DATA_DIR / "group_averages.json", "r") as f:
-                avg_dict = json.load(f)
-            max_year = avg_dict.get("max_year_in_data", 2026)
-            yoy_infl = avg_dict.get("global_yoy_inflation", 0.0)
-        except Exception:
-            max_year = 2026
-            yoy_infl = 0.0
-            
-        pred_year = start_dt.year
-        pred_month = start_dt.month
-        
-        # USER RULE: 0% inflation for Nov-Feb, 10% inflation for March-Oct
-        if pred_month in [11, 12, 1, 2]:
-            yoy_infl = 0.0
-            
-        if pred_year > max_year:
-            years_diff = pred_year - max_year
-            inflation_multiplier = (1.0 + yoy_infl) ** years_diff
-            final_price *= inflation_multiplier
-            revenue_optimized_price *= inflation_multiplier
+        # 9.5 YOY FORWARD INFLATION PROJECTION (REMOVED PER USER REQUEST)
+        # We no longer inflate prices for future years. Prices remain strictly based on historical baselines.
+        inflation_multiplier = 1.0
             
         # Round final outputs
         final_price = round(final_price, -1)

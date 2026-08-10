@@ -408,7 +408,7 @@ class FeatureEngineer:
                 dt_s = pd.to_datetime(df["booking_date"], errors="coerce")
                 df["month"] = dt_s.dt.month.fillna(6).astype(int)
                 df["year"] = dt_s.dt.year.fillna(2026).astype(int)
-                df["is_weekend"] = dt_s.dt.weekday.isin([4, 5, 6]).astype(int) # Include Friday as weekend for farmhouses
+                # (Removed: The generic Friday/Sat/Sun logic that previously overwrote the commercial weekend flag)
             else:
                 if "month" not in df.columns: df["month"] = 6
                 else: df["month"] = pd.to_numeric(df["month"], errors="coerce").fillna(6).astype(int)
@@ -457,8 +457,8 @@ class FeatureEngineer:
                         var = df_clean["person_count"].var()
                         if var > 0:
                             raw_slope = float(cov / var)
-                            # Regularize slope: Floor at 30, Cap at 100 to prevent runaway pricing
-                            return min(100.0, max(30.0, raw_slope))
+                            # Regularize slope: Floor at 30, Cap at 65 to prevent runaway pricing
+                            return min(65.0, max(30.0, raw_slope))
                 return 50.0  # Fallback if insufficient variance
             
             global_marginal_cost = compute_slope(df)
@@ -501,13 +501,9 @@ class FeatureEngineer:
             avg_dict["global_yoy_inflation"] = float(global_yoy_inflation)
             avg_dict["max_year_in_data"] = int(max_year)
             
-            # Apply inflation to base_selling_price to normalize to Current Market Value (CMV) of max_year
             def calc_cmv(r):
-                # USER RULE: 0% inflation for Nov-Feb, 10% inflation for March-Oct
-                if r["month"] in [11, 12, 1, 2]:
-                    return r["base_selling_price"]
-                years_diff = max(0, max_year - r["year"])
-                return r["base_selling_price"] * ((1.0 + global_yoy_inflation) ** years_diff)
+                # USER RULE: Inflation removed completely. Base prices are used as-is.
+                return r["base_selling_price"]
                 
             df["cmv_base_price"] = df.apply(calc_cmv, axis=1)
             df_full["cmv_base_price"] = df_full.apply(calc_cmv, axis=1)

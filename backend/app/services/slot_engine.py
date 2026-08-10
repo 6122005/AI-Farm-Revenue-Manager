@@ -93,6 +93,48 @@ class SlotEngine:
             "duration": duration
         }
 
+    def classify_weekend(self, start_dt: datetime, slot: str) -> int:
+        """
+        Exact commercial weekend classification matching Farm_Booking_Data_new.xlsx formula.
+        """
+        if start_dt is None:
+            return 0
+            
+        from datetime import time
+        weekday = start_dt.weekday()
+        start_time = start_dt.time()
+        
+        night_slots = {
+            "12H Night",
+            "Couple Half Night",
+            "24H Night",
+            "Couple Full Night",
+        }
+        day_slots = {
+            "12H Day",
+            "Couple Half Day",
+            "24H Day",
+            "Couple Full Day",
+        }
+        
+        # Rule 1: Saturday (weekday=5) Evening/Night Booking >= 17:00
+        if (
+            weekday == 5
+            and start_time >= time(17, 0)
+            and slot in night_slots
+        ):
+            return 1
+            
+        # Rule 2: Sunday (weekday=6) Morning/Day Booking 06:00 to 11:59
+        if (
+            weekday == 6
+            and time(6, 0) <= start_time < time(12, 0)
+            and slot in day_slots
+        ):
+            return 1
+            
+        return 0
+
     def get_all_slots(self) -> List[Dict[str, Any]]:
         return self.slots
 

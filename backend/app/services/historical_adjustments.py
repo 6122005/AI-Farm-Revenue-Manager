@@ -19,15 +19,15 @@ class HistoricalAdjustments:
         base_price = context.base_price
         
         # User-defined explicit business rules for lead days
-        if req_lead <= 14:
+        if req_lead == 0:
+            adj = base_price * -0.03
+            reason = f"0 days lead time. Applying 3% discount (-₹{abs(adj):.0f})."
+        elif 1 <= req_lead <= 5:
             adj = 0.0
-            reason = f"Lead time is {req_lead} days. Within standard short-term window (+₹0)."
-        elif req_lead <= 30:
-            adj = 200.0
-            reason = f"Lead time is {req_lead} days (15-30 day window). Applying advance booking premium (+₹200)."
+            reason = f"{req_lead} days lead time (1-5 days). No adjustment (+₹0)."
         else:
-            adj = 300.0
-            reason = f"Lead time is {req_lead} days (31+ day window). Applying long-advance booking premium (+₹300)."
+            adj = base_price * 0.03
+            reason = f"{req_lead} days lead time (> 5 days). Applying 3% premium (+₹{adj:.0f})."
             
         return {
             "adjustment_amount": adj,
