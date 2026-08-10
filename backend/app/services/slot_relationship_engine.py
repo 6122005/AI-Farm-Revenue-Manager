@@ -32,19 +32,7 @@ class IntelligentSlotSimilarityEngine:
         df['norm_slot'] = df['commercial_slot'].apply(slot_engine.normalize_commercial_slot)
         df['season'] = df['month'].apply(cls.get_season)
 
-        # 2. IQR Outlier Filtering globally per slot
-        cleaned_dfs = []
-        for s in df['norm_slot'].unique():
-            sub = df[df['norm_slot'] == s].copy()
-            q1 = sub['selling_price'].quantile(0.25)
-            q3 = sub['selling_price'].quantile(0.75)
-            iqr = q3 - q1
-            sub = sub[(sub['selling_price'] >= q1 - 1.5*iqr) & (sub['selling_price'] <= q3 + 1.5*iqr)]
-            cleaned_dfs.append(sub)
-            
-        if not cleaned_dfs:
-            return {}
-        df = pd.concat(cleaned_dfs)
+
 
         def build_ratios(df_slice):
             means = df_slice.groupby('norm_slot')['selling_price'].mean()

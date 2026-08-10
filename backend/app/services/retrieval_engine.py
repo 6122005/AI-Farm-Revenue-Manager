@@ -78,10 +78,42 @@ class SimilarBookingRetriever:
                 "cv": 0.0
             }
             
+        # Upgrade: Dynamically learn the guest increment rate via Linear Regression
+        learned_guest_rate = 62.5
+        if len(df_subset) >= 2 and 'person_count' in df_subset.columns:
+            x = df_subset['person_count'].fillna(4).astype(float)
+            y = df_subset['selling_price'].astype(float)
+            if x.nunique() > 1:
+                covariance = np.sum((x - np.mean(x)) * (y - np.mean(y)))
+                variance_x = np.sum((x - np.mean(x)) ** 2)
+                if variance_x > 0:
+                    raw_slope = covariance / variance_x
+                    # Bound between 0 and 500
+                    learned_guest_rate = max(0.0, min(500.0, float(raw_slope)))
+        # Upgrade: Dynamically learn the lead days increment rate via Linear Regression
+        learned_lead_slope = 0.0
+        mean_lead_days = 7.0
+        if len(df_subset) >= 2 and 'lead_days' in df_subset.columns:
+            x_lead = df_subset['lead_days'].fillna(7).astype(float)
+            y_lead = df_subset['selling_price'].astype(float)
+            mean_lead_days = float(x_lead.mean())
+            if x_lead.nunique() > 1:
+                cov_lead = np.sum((x_lead - np.mean(x_lead)) * (y_lead - np.mean(y_lead)))
+                var_lead = np.sum((x_lead - np.mean(x_lead)) ** 2)
+                if var_lead > 0:
+                    raw_lead_slope = cov_lead / var_lead
+                    # Bound to +/- 100 rupees per day of lead time to prevent craziness
+                    learned_lead_slope = max(-100.0, min(100.0, float(raw_lead_slope)))
         if "cmv_base_price" in df_subset.columns:
             prices = df_subset['cmv_base_price'].values
         else:
-            prices = df_subset['selling_price'].values
+            # Upgrade: Dynamically calculate true base price by stripping guest fees
+            # assuming base capacity of 4 and marginal cost of learned_guest_rate
+            def get_base_price(row):
+                p_count = int(row.get('person_count', 4)) if not pd.isna(row.get('person_count', 4)) else 4
+                extra = max(0, p_count - 4)
+                return float(row['selling_price']) - (extra * learned_guest_rate)
+            prices = df_subset.apply(get_base_price, axis=1).values
             
         booking_count = len(prices)
         mean_price = np.mean(prices)
@@ -89,12 +121,7 @@ class SimilarBookingRetriever:
         mad = np.mean(np.abs(prices - mean_price))
         variance = np.var(prices) if booking_count > 1 else 0.0
         
-        if booking_count > 2 and mad > 0:
-            is_outlier = np.abs(prices - mean_price) > (3 * mad)
-            trimmed_prices = prices[~is_outlier]
-            trimmed_mean = np.mean(trimmed_prices) if len(trimmed_prices) > 0 else mean_price
-        else:
-            trimmed_mean = np.mean(prices)
+        trimmed_mean = mean_price
             
         cv = np.std(prices) / np.mean(prices) if np.mean(prices) > 0 else 0.0
             
@@ -104,7 +131,10 @@ class SimilarBookingRetriever:
             "trimmed_mean": float(trimmed_mean),
             "variance": float(variance),
             "mad": float(mad),
-            "cv": float(cv)
+            "cv": float(cv),
+            "learned_guest_rate": float(learned_guest_rate),
+            "learned_lead_slope": float(learned_lead_slope),
+            "mean_lead_days": float(mean_lead_days)
         }
 
     @classmethod
@@ -118,13 +148,12 @@ class SimilarBookingRetriever:
         if "is_festival" in df.columns:
             df = df[df["is_festival"] == 0]
 
-        # USER REQUEST RULE: For August to December Weekdays, aggressively drop the top 30%
-        # of high-priced records (hidden events) per slot type so that the weekday base price stays low.
-        if req_month >= 8 and req_weekend == 0:
-            mask = (df["month"] >= 8) & (df["is_weekend"] == 0) & (df["commercial_slot"] == req_slot)
-            if mask.sum() > 3:
-                cap_val = df[mask]["selling_price"].quantile(0.70)
-                df = df[~(mask & (df["selling_price"] > cap_val))]
+        # Business Rule: For May 24H Night Weekend, only consider prices strictly > 11500
+        if req_month == 5 and req_slot == '24H Night' and req_weekend == 1:
+            df = df[df['selling_price'] > 11500]
+
+
+
 
         candidates = pd.DataFrame()
         level_used = 0
@@ -146,6 +175,8 @@ class SimilarBookingRetriever:
             
             ratio, source_level = slot_relationship_engine.get_conversion_ratio(req_slot, best_slot, t_month)
             res_df = pool_df[pool_df['commercial_slot'] == best_slot].copy()
+            res_df['borrowed_ratio'] = ratio
+            res_df['original_selling_price'] = res_df['selling_price']
             res_df['selling_price'] = res_df['selling_price'] * ratio
             if 'cmv_base_price' in res_df.columns:
                 res_df['cmv_base_price'] = res_df['cmv_base_price'] * ratio

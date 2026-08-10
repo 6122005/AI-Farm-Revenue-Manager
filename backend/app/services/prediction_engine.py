@@ -187,11 +187,11 @@ class PredictionEngine:
         else:
             fest_adj = ManualFestivalEngine.calculate_premium(start_dt, end_dt, rep_price)
         
-        # 6. Demand Adjustment (Disabled per user request)
-        demand_adj = {"adjustment_amount": 0.0, "reason": "Demand premium disabled by user."}
+        # 6. Demand Adjustment (Restored)
+        demand_adj = HistoricalAdjustments.calculate_demand_adjustment(context)
         
-        # 7. Weather Adjustment (Disabled per user request)
-        weather_adj = {"adjustment_amount": 0.0, "reason": "Weather adjustment disabled by user."}
+        # 7. Weather Adjustment (Restored)
+        weather_adj = HistoricalAdjustments.calculate_weather_adjustment(context)
         
         # 8. ML Calibration (Max ±10%)
         raw_row = {
@@ -228,10 +228,15 @@ class PredictionEngine:
                 
         ml_predicted = self._predict_single_slot(features, commercial_slot, self.model_artifact)
         
-        # Strict Rule: ML Calibration Max ±10% (REMOVED PER USER REQUEST)
-        # We disable ML calibration entirely because XGBoost predicts un-inflated 2024 prices
-        # and applies unwanted discounts. The user requested strict rule-based pricing.
+        # Upgrade: Dynamic ML Opinion bounded to ±5%
         calibration = 0.0
+        calib_reason = "XGBoost calibration disabled."
+        if ml_predicted and ml_predicted > 0:
+            raw_diff = ml_predicted - rep_price
+            max_bound = rep_price * 0.05
+            calibration = max(-max_bound, min(max_bound, raw_diff))
+            sign = "+" if calibration >= 0 else ""
+            calib_reason = f"ML Opinion (Raw Diff: {sign}₹{raw_diff:.0f}). Capped to ±5% bounds."
         
         # 9. Final Fair Market Price
         final_price = rep_price + guest_adj["adjustment_amount"] + lead_adj["adjustment_amount"] + fest_adj["adjustment_amount"] + demand_adj["adjustment_amount"] + weather_adj["adjustment_amount"] + calibration
@@ -362,7 +367,7 @@ class PredictionEngine:
                 "factor": "ML Calibration",
                 "impact_pct": 0.0,
                 "impact_amount": float(calibration),
-                "description": f"XGBoost calibration bounded strictly to ±10% max."
+                "description": calib_reason
             }
         ]
         

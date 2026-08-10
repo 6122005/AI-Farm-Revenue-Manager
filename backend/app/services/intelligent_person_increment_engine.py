@@ -22,55 +22,26 @@ class IntelligentPersonIncrementEngine:
                 "evidence": {}
             }
             
-        # 1. Use user-approved flat rate per person (₹62.5/person = ₹500 for 8 extra people)
-        slope = 62.5
+        # 1. Fetch AI-learned dynamic guest rate from historical stats
+        # The retrieval engine has run a linear regression on the exact segment to learn this slope.
+        learned_rate = context.stats.get("learned_guest_rate", 62.5)
         
         # 2. Determine base capacity (anchor guests)
-        # If the segment has data, we find the average guest count for those bookings.
-        # Otherwise, assume 2 guests (couple).
-        anchor_guests = df['person_count'].mean() if not df.empty else 2.0
-        
-        # 3. Calculate tiered extra guests
-        # Tier 1: Guests between anchor_guests and 15 (₹62.5 per person)
-        # Tier 2: Guests above 15 (₹100 per person)
-        
-        tier1_rate = 62.5
-        tier2_rate = 100.0
-        tier2_threshold = 15.0
+        # We upgraded the retrieval engine to normalize the base price to the standard base capacity of 4.
+        # Therefore, we strictly anchor at 4 guests.
+        anchor_guests = 4.0
         
         # Total extra guests compared to standard capacity
         total_extra = max(0.0, float(req_guests - anchor_guests))
         
-        tier1_guests = 0.0
-        tier2_guests = 0.0
-        
-        if req_guests > anchor_guests:
-            if req_guests <= tier2_threshold:
-                # All extra guests fall in Tier 1
-                tier1_guests = float(req_guests - anchor_guests)
-            else:
-                # Some or all extra guests fall in Tier 2
-                if anchor_guests >= tier2_threshold:
-                    # Anchor is already >= 15, so all extra are Tier 2
-                    tier2_guests = float(req_guests - anchor_guests)
-                else:
-                    # Anchor is < 15, req is > 15. Mix of Tier 1 and Tier 2
-                    tier1_guests = float(tier2_threshold - anchor_guests)
-                    tier2_guests = float(req_guests - tier2_threshold)
-                    
-        # 4. Calculate total adjustment
-        tier1_adj = tier1_guests * tier1_rate
-        tier2_adj = tier2_guests * tier2_rate
-        adj = tier1_adj + tier2_adj
+        # 3. Calculate total adjustment
+        adj = total_extra * learned_rate
         
         return {
             "adjustment_amount": float(adj),
-            "reason": f"Standard capacity {anchor_guests:.1f}. Added ₹{tier1_rate} for {tier1_guests:.1f} guests up to 15, and ₹{tier2_rate} for {tier2_guests:.1f} guests beyond 15.",
+            "reason": f"Standard capacity {anchor_guests:.1f}. Added ₹{learned_rate:.1f}/person for {total_extra:.1f} extra guests (Dynamic AI Learned Rate).",
             "evidence": {
-                "tier1_rate": float(tier1_rate),
-                "tier2_rate": float(tier2_rate),
-                "tier1_guests": float(tier1_guests),
-                "tier2_guests": float(tier2_guests),
+                "learned_rate": float(learned_rate),
                 "anchor_guests": float(anchor_guests),
                 "total_extra_guests": float(total_extra)
             }
