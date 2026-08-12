@@ -77,8 +77,9 @@ export const Predict: React.FC = () => {
     end_datetime: initialEnd,
     commercial_slot: '12H Day',
     person_count: 4,
-    lead_days: 0,
-    competitor_price: 0
+    lead_days: 7,
+    competitor_price: 0,
+    has_addon: false
   });
 
   const [durationHours, setDurationHours] = useState<number>(12);
@@ -157,7 +158,8 @@ export const Predict: React.FC = () => {
         ...form,
         start_datetime: form.start_datetime?.replace('T', ' '),
         end_datetime: form.end_datetime?.replace('T', ' '),
-        booking_date: form.start_datetime?.split('T')[0]
+        booking_date: form.start_datetime?.split('T')[0],
+        has_addon: form.has_addon
       };
       const res = await api.predictPrice(reqPayload);
       setPrediction(res);
@@ -758,6 +760,26 @@ export const Predict: React.FC = () => {
                       </div>
                     </div>
                   ))}
+
+                  {/* JBL / Add-on Toggle */}
+                  <div className="pt-2">
+                    <label className="flex items-center gap-2 cursor-pointer group">
+                      <div className="relative flex items-center">
+                        <input
+                          type="checkbox"
+                          className="sr-only"
+                          checked={form.has_addon || false}
+                          onChange={(e) => setForm(f => ({ ...f, has_addon: e.target.checked }))}
+                        />
+                        <div className={`w-10 h-5 rounded-full transition-colors ${form.has_addon ? 'bg-indigo-500' : 'bg-slate-300 dark:bg-slate-600'}`}></div>
+                        <div className={`absolute left-0.5 top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${form.has_addon ? 'translate-x-5' : 'translate-x-0'}`}></div>
+                      </div>
+                      <span className="text-sm font-medium text-slate-700 dark:text-slate-300 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
+                        Add-ons (e.g., JBL Sound System)
+                      </span>
+                    </label>
+                  </div>
+
                 </div>
               </div>
 

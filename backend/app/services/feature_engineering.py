@@ -380,16 +380,9 @@ class FeatureEngineer:
         df["booking_velocity"] = (df["bookings_last_7d"] / 7.0).astype(float)
         
         # V2 Occupancy Intelligence
-        df["month_year"] = df["booking_date_dt"].dt.to_period("M")
-        month_counts = df.groupby("month_year")["selling_price"].transform("count").astype(float)
-        df["current_occupancy_pct"] = (month_counts / 120.0).clip(0.0, 1.0)
-        df["remaining_inventory"] = (120.0 - month_counts).clip(lower=0.0)
         df["booking_pace"] = (df["bookings_last_7d"] / 7.0) / (df["bookings_last_30d"] / 30.0 + 1e-5)
         df["booking_pace"] = df["booking_pace"].clip(0.1, 5.0).fillna(1.0)
         df["occupancy_trend"] = df["occupancy_rate_7d"] - df["occupancy_rate_30d"]
-        
-        if "month_year" in df.columns:
-            df.drop(columns=["month_year"], inplace=True)
             
         return df
 
@@ -718,15 +711,18 @@ class FeatureEngineer:
         commercial_slot = row.get("commercial_slot", str(row.get("slot_type", "")))
         commercial_slot = slot_engine.normalize_commercial_slot(commercial_slot).strip().title()
         
+        from app.services.business_calendar import BusinessCalendar
+        b_res = BusinessCalendar.calculate_business_weekend(dt, commercial_slot)
+        
         # 1. Trust explicit 'is_weekend' if provided in the row (e.g. historical data processing)
         if "is_weekend" in row and pd.notna(row["is_weekend"]):
             is_weekend = int(float(row["is_weekend"]))
+            if "business_weekend_reason" not in row or pd.isna(row["business_weekend_reason"]):
+                row["business_weekend_reason"] = "PRE_COMPUTED"
         else:
-            is_weekend = 0
-            if day_of_week == 5 and "Night" in commercial_slot and start_dt.hour >= 17:
-                is_weekend = 1
-            elif day_of_week == 6 and "Day" in commercial_slot and 6 <= start_dt.hour <= 12:
-                is_weekend = 1
+            is_weekend = b_res["business_is_weekend"]
+            
+        row["business_weekend_reason"] = b_res["business_weekend_reason"]
 
         # Intelligent Festival Demand Window Engine
         from app.services.festival_engine import festival_engine
@@ -776,7 +772,11 @@ class FeatureEngineer:
         if "is_vacation" in row and pd.notna(row["is_vacation"]):
             is_vacation = int(float(row["is_vacation"]))
         else:
-            is_vacation = 1 if month in [5, 12, 1] else 0
+            # Summer: April 10 to June 15
+            is_summer_vac = (month == 4 and dt.day >= 10) or (month == 5) or (month == 6 and dt.day <= 15)
+            # Diwali (approximate general rule)
+            is_diwali_vac = (month == 11 and dt.day <= 20)
+            is_vacation = 1 if (is_summer_vac or is_diwali_vac) else 0
 
         # Season
         if "season" in row and pd.notna(row["season"]):
@@ -834,7 +834,14 @@ class FeatureEngineer:
 
         is_long_weekend = 1 if (is_weekend and (is_festival or is_festival_eve or is_vacation or days_before_festival <= 1 or days_after_festival <= 1)) else 0
         is_consecutive_holiday = 1 if (is_festival or is_festival_eve or days_before_festival == 1 or days_after_festival == 1) else 0
-        is_school_vacation = 1 if month in [5, 10, 12] else 0
+        # User Domain Knowledge: Summer vacation is strictly April 15 to June 15
+        is_school_vacation = 0
+        if month == 5 or month == 10 or month == 12:
+            is_school_vacation = 1
+        elif month == 4 and target_date.day >= 15:
+            is_school_vacation = 1
+        elif month == 6 and target_date.day <= 15:
+            is_school_vacation = 1
         is_local_vacation = 1 if month in [5, 10, 12, 1] else 0
         
         try:
@@ -967,6 +974,30 @@ class FeatureEngineer:
 
         slot_utilization_ratio = min(1.0, max(0.1, duration_hours / slot_capacity_hours))
         opportunity_cost_factor = float(np.round(max(0.90, 0.90 + 0.10 * slot_utilization_ratio), 4))
+        
+        # New Duration Dominance features
+        expected_category_duration = slot_capacity_hours
+        duration_deviation = duration_hours - expected_category_duration
+        duration_ratio = duration_hours / expected_category_duration if expected_category_duration > 0 else 1.0
+        
+        if duration_hours < expected_category_duration - 1:
+            duration_status = "Shortened"
+        elif duration_hours > expected_category_duration + 1:
+            duration_status = "Extended"
+        else:
+            duration_status = "Exact"
+            
+        # Interaction features
+        cat_map = {"12H DAY": 1, "12H NIGHT": 2, "24H DAY": 3, "24H NIGHT": 4, "COUPLE": 0}
+        cat_val = 0
+        for k, v in cat_map.items():
+            if k in slot_type.upper():
+                cat_val = v
+                break
+        
+        interaction_duration_category = duration_hours * cat_val
+        interaction_duration_guests = duration_hours * person_count
+        interaction_duration_weekend = duration_hours * is_weekend
 
         competitor_diff = 0.0
         if competitor_price > 0:
@@ -1033,6 +1064,8 @@ class FeatureEngineer:
             "month_cos": month_cos,
             "year": year,
             "day_of_week": day_of_week,
+            "hour": dt.hour,
+            "minute": dt.minute,
             "week_of_year": week_of_year,
             "day_of_year": day_of_year,
             "is_weekend": is_weekend,
@@ -1079,6 +1112,13 @@ class FeatureEngineer:
             "extended_discount_ratio": extended_discount_ratio,
             "extended_stay": extended_stay,
             "slot_utilization_ratio": slot_utilization_ratio,
+            "expected_category_duration": expected_category_duration,
+            "duration_deviation": duration_deviation,
+            "duration_ratio": duration_ratio,
+            "duration_status": duration_status,
+            "interaction_duration_category": interaction_duration_category,
+            "interaction_duration_guests": interaction_duration_guests,
+            "interaction_duration_weekend": interaction_duration_weekend,
 
             "opportunity_cost_factor": opportunity_cost_factor,
             "person_count": person_count,
@@ -1234,7 +1274,7 @@ class FeatureEngineer:
                     cols_to_drop.append(c)
                 else:
                     col_map[c] = "booking_date"
-            elif clean in ["slot", "commercial_slot", "slot_type", "inventory_slot", "timing", "type", "booking_category", "category"]:
+            elif clean in ["slot", "commercial_slot", "inventory_slot", "timing", "type", "booking_category", "category"]:
                 if "commercial_slot" in explicit_cols:
                     cols_to_drop.append(c)
                 else:
@@ -1301,11 +1341,6 @@ class FeatureEngineer:
         else:
             df["selling_price"] = pd.to_numeric(df["selling_price"], errors="coerce").fillna(8500.0)
 
-        # Drop any raw datetime columns named month/year/day_of_week
-        for col_to_drop in ["month", "year", "day_of_week"]:
-            if col_to_drop in df.columns:
-                df.drop(columns=[col_to_drop], inplace=True)
-
         # Call compute_advanced_time_series_features to get advanced rolling features (lags, occupancy)
         if len(df) >= 2:
             df = cls.compute_advanced_time_series_features(df)
@@ -1314,7 +1349,6 @@ class FeatureEngineer:
         if len(df) > 5 and not is_prediction:
             BusinessInsightDiscoverer.discover_and_save_insights(df)
 
-        # Optimize: if _is_prediction_row is present, only extract features for the new prediction targets
         if "_is_prediction_row" in df.columns:
             target_mask = df["_is_prediction_row"] == True
             df_targets = df[target_mask].copy()
@@ -1323,7 +1357,7 @@ class FeatureEngineer:
             features_list = [FeatureEngineer.extract_features_from_dict(row.to_dict()) for _, row in df_targets.iterrows()]
             features_df = pd.DataFrame(features_list)
             
-            raw_inputs = ["booking_date", "commercial_slot", "slot_type", "selling_price", "person_count", "duration_hours", "lead_days", "competitor_price", "_is_prediction_row"]
+            raw_inputs = ["booking_date", "commercial_slot", "selling_price", "person_count", "duration_hours", "lead_days", "competitor_price", "_is_prediction_row", "rag_lead_adj", "rag_fest_adj", "rag_demand_adj", "rag_weather_adj"]
             drop_cols = [c for c in df_targets.columns if c in features_df.columns and c not in raw_inputs]
             df_targets_clean = df_targets.drop(columns=drop_cols).reset_index(drop=True)
             
@@ -1333,12 +1367,11 @@ class FeatureEngineer:
             
             processed_targets = pd.concat([df_targets_clean, features_df_clean], axis=1)
             combined_df = pd.concat([df_history, processed_targets], ignore_index=True)
-            combined_df = combined_df.loc[:, ~combined_df.columns.duplicated()]
         else:
             features_list = [FeatureEngineer.extract_features_from_dict(row.to_dict()) for _, row in df.iterrows()]
             features_df = pd.DataFrame(features_list)
             
-            raw_inputs = ["booking_date", "commercial_slot", "slot_type", "selling_price", "person_count", "duration_hours", "lead_days", "competitor_price"]
+            raw_inputs = ["booking_date", "commercial_slot", "selling_price", "person_count", "duration_hours", "lead_days", "competitor_price", "rag_lead_adj", "rag_fest_adj", "rag_demand_adj", "rag_weather_adj"]
             drop_cols = [c for c in df.columns if c in features_df.columns and c not in raw_inputs]
             df_clean = df.drop(columns=drop_cols).reset_index(drop=True)
             

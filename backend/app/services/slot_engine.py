@@ -32,9 +32,14 @@ class SlotEngine:
 
     def normalize_commercial_slot(self, slot_val: Any) -> str:
         """
-        Normalize slot names to the 4 base slots.
+        Normalize slot names but preserve Couple categories.
         """
         s = str(slot_val).upper().strip().replace("_", " ").replace("-", " ")
+        if "COUPLE" in s:
+            if "NIGHT" in s:
+                return "Couple Half Night"
+            return "Couple Half Day"
+            
         if "12H DAY" in s or "HALF DAY" in s:
             return "12H Day"
         elif "12H NIGHT" in s:
@@ -44,7 +49,7 @@ class SlotEngine:
         elif "24H NIGHT" in s:
             return "24H Night"
             
-        if "24H" in s:
+        if "24H" in s or "EXTENDED" in s or "48H" in s or "MULTI" in s:
             if "NIGHT" in s:
                 return "24H Night"
             return "24H Day"

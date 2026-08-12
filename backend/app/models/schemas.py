@@ -46,6 +46,7 @@ class PredictionRequest(BaseModel):
     person_count: int = Field(4, ge=1, le=100, example=4, description="Number of guests")
     is_couple: Optional[bool] = Field(False, description="Couple Booking (person_count == 2)")
     extended_stay: Optional[bool] = Field(False, description="Extended Stay (duration > 24)")
+    has_addon: Optional[bool] = Field(False, description="Booking includes JBL sound system or other add-ons")
     lead_days: Optional[int] = Field(None, ge=0, example=7, description="Lead days prior to booking")
     competitor_price: Optional[float] = Field(0.0, example=0.0, description="Competitor price")
     
@@ -55,6 +56,7 @@ class PredictionRequest(BaseModel):
     demand_level: Optional[str] = Field(None, description="Demand override level")
     festival_name: Optional[str] = Field(None, description="Festival name")
     special_event_override: Optional[bool] = Field(False, description="Manual special event override")
+    booking_notes: Optional[str] = Field(None, description="Raw notes/description from the user to extract NLP features")
 
 class OutcomeRequest(BaseModel):
     prediction_id: int = Field(..., description="The ID of the PredictionLog entry")
@@ -176,6 +178,35 @@ class PredictionResponse(BaseModel):
     original_requested_guests: Optional[int] = None
     fallback_explainability: Optional[FallbackExplainability] = None
     validation_trace: Optional[ValidationTrace] = None
+    
+    warnings: Optional[List[str]] = Field(default_factory=list)
+    pattern_coverage: Optional[str] = None
+    duration_effect: Optional[float] = None
+    category_effect: Optional[float] = None
+    guest_effect: Optional[float] = None
+    weekend_effect: Optional[float] = None
+    season_effect: Optional[float] = None
+    festival_effect: Optional[float] = None
+    lead_time_effect: Optional[float] = None
+    raw_model_price: Optional[float] = None
+
+class TrainingReportResponse(BaseModel):
+    total_records: int
+    training_records: int
+    validation_records: int
+    test_records: int
+    excluded_outliers: int
+    duration_inconsistencies: int
+    missing_guest_records: int
+    champion_model: str
+    r2_score: float
+    mae: float
+    pattern_coverage_score: float
+    duration_learning_status: str
+    category_learning_status: str
+    weekend_learning_status: str
+    festival_learning_status: str
+    production_ready_status: str
 
 class RollbackRequest(BaseModel):
     version_id: str = Field(..., description="Timestamp version ID to rollback to")

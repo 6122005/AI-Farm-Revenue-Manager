@@ -35,6 +35,7 @@ export interface PredictionRequest {
   person_count: number;
   is_couple?: boolean;
   extended_stay?: boolean;
+  has_addon?: boolean;
   lead_days: number;
   competitor_price?: number;
 }

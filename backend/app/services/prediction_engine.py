@@ -62,9 +62,25 @@ class PredictionEngine:
         cat_cols = artifact.get("categorical_features", [])
         
         # 1. Base Features
-        df = pd.DataFrame([features_dict])
+        pred_df = pd.DataFrame([features_dict])
+        pred_df["_is_prediction_row"] = True
+        
+        # Process the single prediction row
+        processed_pred_df = FeatureEngineer.process_dataframe(pred_df, is_prediction=True)
+        
         hist_df = self.get_clean_data()
-        df = FeatureEngineer.process_dataframe(df, is_prediction=True, historical_df=hist_df)
+        
+        if not hist_df.empty:
+            # We assume hist_df is already processed.
+            processed_df = pd.concat([hist_df, processed_pred_df], ignore_index=True)
+        else:
+            processed_df = processed_pred_df
+            
+        df = processed_pred_df.copy()
+        
+        if df.empty:
+            df = processed_df.tail(1).copy()
+            
         df["slot_norm"] = df["slot_type"].apply(slot_engine.normalize_commercial_slot) if "slot_type" in df.columns else slot_engine.normalize_commercial_slot(slot_type)
         
         for col in feature_cols:
@@ -88,9 +104,42 @@ class PredictionEngine:
             if col not in cat_cols:
                 X[col] = pd.to_numeric(X[col], errors='coerce').fillna(0)
                 
-        pred_trans = model.predict(X)[0]
-        # Same transformation as original
-        pred_raw = float(np.expm1(pred_trans)) if pred_trans < 25.0 else pred_trans
+        model_type = artifact.get("model_type", "Single-Stage")
+        if model_type == "Two-Stage":
+            stage1_features = artifact.get("stage1_features", [])
+            stage2_features = artifact.get("stage2_features", [])
+            p1 = model["stage1"].predict(X[stage1_features])[0]
+            p2 = model["stage2"].predict(X[stage2_features])[0]
+            pred_raw = float(p1 + p2)
+        elif model_type == "Hierarchical Baseline Residual":
+            from app.services.historical_pricing_baseline import HistoricalPricingBaseline
+            if "start_datetime" not in processed_df.columns:
+                processed_df["start_datetime"] = pd.to_datetime(processed_df["booking_date"], errors="coerce")
+                
+            base_df = HistoricalPricingBaseline.fit_predict_expanding(processed_df)
+            
+            pred_row_base = base_df[base_df["_is_prediction_row"] == True]
+            if not pred_row_base.empty:
+                baseline_val = pred_row_base["historical_baseline_price"].iloc[0]
+            else:
+                baseline_val = base_df["selling_price"].median()
+                
+            residual_val = float(model["base_model"].predict(X)[0])
+            
+            # GUARDRAIL: Prevent wild extrapolations for out-of-distribution inputs (e.g. 2 guests for a slot that normally has 15)
+            # The residual should never swing the price by more than 15% of the baseline.
+            max_swing = baseline_val * 0.15
+            residual_val = max(-max_swing, min(max_swing, residual_val))
+            
+            pred_raw = float(baseline_val + residual_val)
+        else:
+            if isinstance(model, dict) and "base_model" in model:
+                pred_raw = float(model["base_model"].predict(X)[0])
+            else:
+                pred_raw = float(model.predict(X)[0])
+            
+        # Ensure it doesn't drop below absolute business floor
+        pred_raw = max(500.0, pred_raw)
         return float(pred_raw)
 
     def get_clean_data(self) -> pd.DataFrame:
@@ -137,7 +186,9 @@ class PredictionEngine:
         end_dt = datetime.strptime(req["end_datetime"], "%Y-%m-%d %H:%M")
         commercial_slot = req.get("commercial_slot", "12H Day")
         person_count = req.get("person_count", 4)
-        lead_days = req.get("lead_days", 0)
+        lead_days = req.get("lead_days")
+        if lead_days is None:
+            lead_days = max(0, (start_dt.date() - datetime.today().date()).days)
         
         month_val = start_dt.month
         
@@ -170,30 +221,13 @@ class PredictionEngine:
         context = SimilarBookingRetriever.retrieve(req_dict, df_clean)
         
         # RULE 1: Golden Pipeline Order Enforced Here
-        # 1. Historical Retrieval -> Done (context)
-        # 2. Representative Price
-        rep_price = context.base_price
+        # 1. Historical Retrieval -> Done (context) (Still used for lead, weather, demand trends)
         
-        # 3. Guest Adjustment
-        guest_adj = IntelligentPersonIncrementEngine.calculate_guest_increment(context)
+        # 2. Native ML Baseline Prediction
+        # Extract NLP features from booking notes
+        notes = (req.get("booking_notes") or "").lower()
+        import re
         
-        # 4. Lead Adjustment
-        lead_adj = HistoricalAdjustments.calculate_lead_days_adjustment(context)
-        
-        # 5. Festival Adjustment (New Manual Excel Engine)
-        from app.services.manual_festival_engine import ManualFestivalEngine
-        if req.get("skip_festival", False):
-            fest_adj = {"adjustment_amount": 0.0, "reason": "Festival premium disabled by user."}
-        else:
-            fest_adj = ManualFestivalEngine.calculate_premium(start_dt, end_dt, rep_price)
-        
-        # 6. Demand Adjustment (Disabled per user request)
-        demand_adj = {"adjustment_amount": 0.0, "reason": "Demand premium disabled by user."}
-        
-        # 7. Weather Adjustment (Disabled per user request)
-        weather_adj = {"adjustment_amount": 0.0, "reason": "Weather adjustment disabled by user."}
-        
-        # 8. ML Calibration (Max ±10%)
         raw_row = {
             "start_datetime": req["start_datetime"],
             "booking_date": start_dt.strftime("%Y-%m-%d"),
@@ -202,39 +236,43 @@ class PredictionEngine:
             "person_count": person_count,
             "lead_days": lead_days,
             "duration_hours": duration_hours,
-            "is_weekend": is_weekend_val
+            "is_weekend": is_weekend_val,
+            "has_addon": 1 if req.get("has_addon") else 0,
+            "is_farm_11": 1 if re.search(r"farm\s*11|farm\s*number\s*11", notes) else 0,
+            "is_friend_relation": 1 if re.search(r"friend|mitra|relative|relation|bhai", notes) else 0,
+            "has_discount": 1 if re.search(r"discount|less", notes) else 0,
+            "has_penalty": 1 if re.search(r"penalty|advance", notes) else 0,
+            "has_catering": 1 if re.search(r"food|catering|meal|jamvanu|lunch|dinner", notes) else 0,
+            "is_corporate": 1 if re.search(r"corporate|company|staff", notes) else 0,
+            "_is_prediction_row": True
         }
-        features = FeatureEngineer.extract_features_from_dict(raw_row)
-        # Freeze lead_days to 5 for the ML Model so it doesn't try to apply its own learned discounts on top of the explicit business rule.
-        features["lead_days"] = 5
         
-        # Freeze person_count to the historical average for this segment so the ML model DOES NOT 
-        # apply any "small group discount" or "extra guest premium" (which is handled explicitly by Guest Engine).
-        anchor_guests = int(context.retrieved_segment['person_count'].mean()) if not context.retrieved_segment.empty else 15
-        features["person_count"] = anchor_guests
-        features["duration_hours"] = duration_hours
+        ml_predicted = self._predict_single_slot(raw_row, commercial_slot, self.model_artifact)
+        rep_price = ml_predicted if ml_predicted else context.base_price
         
-        features["segment_representative_price"] = rep_price
-        features["segment_booking_count"] = context.booking_count
-        features["segment_variance"] = context.stats.get("variance", 0.0)
-        features["segment_guest_increment"] = guest_adj["adjustment_amount"]
-        features["segment_lead_adjustment"] = lead_adj["adjustment_amount"]
-        features["segment_festival_adjustment"] = fest_adj["adjustment_amount"]
-        features["segment_similarity_score"] = context.confidence
+        # 3. Guest Adjustment
+        from app.services.intelligent_person_increment_engine import IntelligentPersonIncrementEngine
+        guest_adj = IntelligentPersonIncrementEngine.calculate_guest_increment(context)
         
-        for k, v in list(features.items()):
-            if pd.isna(v):
-                features[k] = None
-                
-        ml_predicted = self._predict_single_slot(features, commercial_slot, self.model_artifact)
+        # 4. Festival Impact
+        fest_adj = {"adjustment_amount": 0.0, "reason": "Festival logic absorbed by ML model."}
         
-        # Strict Rule: ML Calibration Max ±10% (REMOVED PER USER REQUEST)
-        # We disable ML calibration entirely because XGBoost predicts un-inflated 2024 prices
-        # and applies unwanted discounts. The user requested strict rule-based pricing.
+        # 5. Lead Adjustment
+        from app.services.historical_adjustments import HistoricalAdjustments
+        lead_adj = HistoricalAdjustments.calculate_lead_days_adjustment(context)
+        
+        # 6. Demand Adjustment
+        demand_adj = HistoricalAdjustments.calculate_demand_adjustment(context)
+        
+        # 7. Weather Adjustment
+        weather_adj = HistoricalAdjustments.calculate_weather_adjustment(context)
+        
+        # 8. ML Calibration (Obsolete, as ML is now the core baseline)
         calibration = 0.0
+        calib_reason = "Native ML Baseline active. (No secondary calibration needed)."
         
         # 9. Final Fair Market Price
-        final_price = rep_price + guest_adj["adjustment_amount"] + lead_adj["adjustment_amount"] + fest_adj["adjustment_amount"] + demand_adj["adjustment_amount"] + weather_adj["adjustment_amount"] + calibration
+        final_price = rep_price + guest_adj["adjustment_amount"] + lead_adj["adjustment_amount"] + fest_adj["adjustment_amount"] + demand_adj["adjustment_amount"] + weather_adj["adjustment_amount"]
         
         # 9.2 Commercial Optimization Layer (Demand Elasticity simulation)
         from app.services.commercial_optimizer import CommercialOptimizer
@@ -326,7 +364,7 @@ class PredictionEngine:
                 "factor": "Representative Price",
                 "impact_pct": 0.0,
                 "impact_amount": float(rep_price),
-                "description": price_desc
+                "description": "Base price autonomously learned by the Pure ML Engine."
             },
             {
                 "factor": "Guest Adjustment",
@@ -362,7 +400,7 @@ class PredictionEngine:
                 "factor": "ML Calibration",
                 "impact_pct": 0.0,
                 "impact_amount": float(calibration),
-                "description": f"XGBoost calibration bounded strictly to ±10% max."
+                "description": calib_reason
             }
         ]
         
@@ -398,20 +436,47 @@ class PredictionEngine:
         # Calculate expected occupancy (Placeholder based on demand)
         occupancy_pct = min(100.0, max(0.0, float(context.stats.get("confidence", 70.0))))
         
+        c_hist = context.confidence
+        warnings = []
+        if context.booking_count < 3 and c_hist < 50.0:
+            warnings.append("Insufficient historical evidence \u2014 this pattern cannot be reliably learned.")
+            reliability = "INSUFFICIENT EVIDENCE"
+        elif c_hist >= 80:
+            reliability = "HIGH"
+        elif c_hist >= 50:
+            reliability = "MEDIUM"
+        else:
+            reliability = "LOW"
+            warnings.append("Low historical evidence. Price is based on broad segment patterns.")
+
         # Determine actual price to output
         actual_recommendation = revenue_optimized_price + consistency_adj
+        raw_model_price = float(actual_recommendation)
         
-        c_hist = context.confidence
-        
-        adj_str = f"Guest Adj: {guest_adj['adjustment_amount']}, Lead Adj: {lead_adj['adjustment_amount']}, Fest Adj: {fest_adj['adjustment_amount']}, Demand Adj: {demand_adj['adjustment_amount']}, ML Calib: {calibration:.1f}"
-        hist_explanation = f"Base historical median: {rep_price} + {adj_str}"
+        # Configurable Rounding Rule
+        if actual_recommendation < 5000:
+            actual_recommendation = np.round(actual_recommendation / 50.0) * 50.0
+        elif actual_recommendation < 10000:
+            actual_recommendation = np.round(actual_recommendation / 100.0) * 100.0
+        elif actual_recommendation < 20000:
+            actual_recommendation = np.round(actual_recommendation / 250.0) * 250.0
+        else:
+            actual_recommendation = np.round(actual_recommendation / 500.0) * 500.0
+            
+        adj_str = f"Guest Adj: {guest_adj['adjustment_amount']}, Lead Adj: {lead_adj['adjustment_amount']}, Fest Adj: {fest_adj['adjustment_amount']}, Demand Adj: {demand_adj['adjustment_amount']}"
+        hist_explanation = f"ML Native Baseline: {rep_price} + {adj_str}"
         
         debug_audit = {
             "level_used": context.level_used,
             "confidence": context.confidence,
             "booking_count": context.booking_count,
             "borrowing_metadata": context.borrowing_metadata,
+            "base_market_price": rep_price,
+            "guest_adjustment": guest_adj["adjustment_amount"],
+            "lead_time_adjustment": lead_adj["adjustment_amount"],
             "guest_evidence": guest_adj.get("evidence", {}),
+            "lead_evidence": lead_adj.get("evidence", {}),
+            "guest_reason": guest_adj.get("reason", ""),
             "lead_reason": lead_adj.get("reason", ""),
             "festival_reason": fest_adj.get("reason", "")
         }
@@ -434,16 +499,18 @@ class PredictionEngine:
         return PredictionResponse(
             recommended_price=float(actual_recommendation),
             revenue_optimized_price=float(actual_recommendation),
+            raw_model_price=float(raw_model_price),
+            warnings=warnings,
+            reliability_level=reliability,
             fair_market_price=float(final_price),
             min_price=float(final_price * 0.9),
             max_price=float(actual_recommendation * 1.15),
             demand_score=float(np.round(min(1.0, context.booking_count / 10.0), 2)),
             confidence_score=float(np.round(c_hist, 1)),
-            reliability_level="High" if c_hist >= 80 else "Medium" if c_hist >= 50 else "Low",
             data_quality_score=float(np.round(c_hist / 100.0, 2)),
             sample_size_used=context.booking_count,
             similar_bookings_count=context.booking_count,
-            expected_occupancy_pct=float(np.round(features.get("current_occupancy_pct", 0.35) * 100.0, 1)),
+            expected_occupancy_pct=float(np.round(raw_row.get("current_occupancy_pct", 0.35) * 100.0, 1)),
             commercial_slot=commercial_slot,
             slot_type=commercial_slot,
             is_couple=bool(person_count == 2),
@@ -452,6 +519,13 @@ class PredictionEngine:
             start_datetime=req["start_datetime"],
             end_datetime=req["end_datetime"],
             duration_hours=duration_hours,
+            duration_effect=0.0,
+            category_effect=0.0,
+            guest_effect=float(guest_adj["adjustment_amount"]),
+            weekend_effect=0.0,
+            season_effect=0.0,
+            festival_effect=float(fest_adj["adjustment_amount"]),
+            lead_time_effect=float(lead_adj["adjustment_amount"]),
             original_requested_guests=person_count,
             validation_trace={
                 "total_raw_records": len(df_clean) + 50, # Mocked offset for global pipeline

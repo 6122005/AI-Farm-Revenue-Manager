@@ -175,27 +175,31 @@ class DataPipeline:
     @classmethod
     def normalize_commercial_slot(cls, slot_val: Any) -> str:
         s = str(slot_val).upper().strip().replace(" ", "_")
-        if "12H_DAY" in s or "12_HR_DAY" in s or "12_HOUR_DAY" in s or "HALF_DAY" in s or "DAY_SLOT" in s:
+        
+        if "12" in s and "DAY" in s:
             return "12H_DAY"
-        if "12H_NIGHT" in s or "12_HR_NIGHT" in s or "12_HOUR_NIGHT" in s or "NIGHT_SLOT" in s:
+        if "12" in s and "NIGHT" in s:
             return "12H_NIGHT"
-        if "24H_DAY" in s or "24_HR_DAY" in s or "24_HOUR_DAY" in s or "24H_FULL" in s:
+        if "24" in s and "DAY" in s:
             return "24H_DAY"
-        if "24H_NIGHT" in s or "24_HR_NIGHT" in s or "24_HOUR_NIGHT" in s:
+        if "24" in s and "NIGHT" in s:
             return "24H_NIGHT"
-        if "COUPLE_DAY" in s:
-            return "COUPLE_DAY"
-        if "COUPLE_NIGHT" in s:
-            return "COUPLE_NIGHT"
-        if "COUPLE" in s or "6H_COUPLE" in s or "COUPLE_SLOT" in s:
-            return "COUPLE_SLOT"
+        if "COUPLE" in s:
+            if "HALF" in s:
+                return "COUPLE_HALF_DAY"
+            else:
+                return "COUPLE_FULL_DAY" # Covers Full Night, Extended Day etc as per user instruction
+        if "EXTENDED" in s:
+            return "EXTENDED_DAY"
         if "WEDDING" in s:
             return "WEDDING_EVENT"
         if "CORPORATE" in s:
             return "CORPORATE_EVENT"
         if "POOL" in s:
             return "POOL_PARTY"
-        return s
+            
+        # Fallback to the most common if something weird is entered
+        return "12H_DAY"
 
     @classmethod
     def process_with_explicit_mapping(
@@ -213,6 +217,12 @@ class DataPipeline:
         Guarantees NO target guessing!
         """
         df = cls.load_raw_dataframe(file_path)
+
+        # Drop agent bookings if Title column exists
+        title_col = next((c for c in df.columns if str(c).strip().lower() == "title"), None)
+        if title_col:
+            agent_mask = df[title_col].astype(str).str.contains("agent|broker|vyas|vinay", case=False, na=False)
+            df = df[~agent_mask].copy()
 
         mapped_df = df.copy()
 
@@ -243,10 +253,11 @@ class DataPipeline:
                 return pd.NaT
         mapped_df["start_datetime"] = df.apply(_get_full_dt, axis=1)
         mapped_df["booking_date"] = mapped_df["booking_date"].fillna(date.today().strftime("%Y-%m-%d"))
+        mapped_df["actual_day_of_week"] = mapped_df["start_datetime"].dt.weekday
 
         # 3. Guest Count and Couple Determination (Step 3 Rule)
         if guests_col and guests_col in df.columns:
-            mapped_df["person_count"] = pd.to_numeric(df[guests_col], errors="coerce").fillna(4).astype(int)
+            mapped_df["person_count"] = pd.to_numeric(df[guests_col], errors="coerce")
         else:
             extracted_persons = []
             desc_series = df["Description"] if "Description" in df.columns else pd.Series([None] * len(df))
@@ -262,7 +273,7 @@ class DataPipeline:
                     if "COUPLE" in slot_clean:
                         extracted_persons.append(2)
                     else:
-                        extracted_persons.append(8)
+                        extracted_persons.append(np.nan)
             mapped_df["person_count"] = extracted_persons
 
         mapped_df["is_couple"] = (mapped_df["person_count"] == 2).astype(int)
@@ -271,33 +282,31 @@ class DataPipeline:
         dur_col = next((c for c in df.columns if any(k in str(c).lower() for k in ["duration", "hours", "stay"])), None)
         end_d_col = next((c for c in df.columns if "end date" in str(c).lower() or "checkout_date" in str(c).lower()), None)
         
-        def _calc_dur(row):
-            # 1. Try to compute from Start Date and End Date directly if they have times
+        def _calc_durs(row):
+            dt_dur = None
+            ex_dur = None
+            
             try:
                 if end_d_col and not pd.isna(row.get(end_d_col)):
                     sd = pd.to_datetime(row.get(date_col))
                     ed = pd.to_datetime(row.get(end_d_col))
                     diff = (ed - sd).total_seconds() / 3600.0
-                    
-                    if diff > 15:
-                        return 24.0 # Treat anything > 15 hours as a 24H slot
-                    elif diff > 0:
-                        return 12.0 # Treat anything else > 0 as a 12H slot
+                    if diff > 0:
+                        dt_dur = float(diff)
             except Exception:
                 pass
-            
-            # 2. Try the explicit duration column if it has a valid number
+                
             if dur_col and not pd.isna(row.get(dur_col)):
                 try:
                     val = float(row.get(dur_col))
-                    if val > 0: return float(val)
+                    if val > 0: ex_dur = float(val)
                 except Exception:
                     pass
-                    
-            # 3. Ultimate fallback
-            return 12.0
+            
+            resolved = dt_dur if dt_dur is not None else (ex_dur if ex_dur is not None else 12.0)
+            return pd.Series([dt_dur, ex_dur, resolved])
 
-        mapped_df["duration_hours"] = df.apply(_calc_dur, axis=1)
+        mapped_df[["duration_from_datetime", "duration_from_excel", "duration_hours"]] = df.apply(_calc_durs, axis=1)
 
         # Extended Stay Flag (Step 1 Rule)
         mapped_df["extended_stay"] = (mapped_df["duration_hours"] > 24).astype(int)
@@ -339,20 +348,24 @@ class DataPipeline:
         mapped_df["slot_type"] = inferred_slots
         mapped_df["commercial_slot"] = mapped_df["slot_type"] # backwards compatibility
 
-        # 6. Lead Days
+        # 6. Strict Lead Days (Calendar Math)
         created_cols = [c for c in df.columns if any(k in str(c).lower() for k in ["create", "booking_date", "date_created"])]
-        if lead_col and lead_col in df.columns:
-            mapped_df["lead_days"] = pd.to_numeric(df[lead_col], errors="coerce").fillna(7).astype(int)
-        elif created_cols and date_col and date_col in df.columns:
+        if created_cols and date_col and date_col in df.columns:
             try:
                 checkin = pd.to_datetime(df[date_col], errors="coerce")
                 created = pd.to_datetime(df[created_cols[0]], errors="coerce")
                 lead_days_derived = (checkin.dt.date - created.dt.date).dt.days
-                mapped_df["lead_days"] = lead_days_derived.fillna(7).clip(lower=0).astype(int)
+                mapped_df["lead_days"] = lead_days_derived.clip(lower=0).fillna(7).astype(int)
             except Exception:
-                mapped_df["lead_days"] = 7
+                mapped_df["lead_days"] = pd.to_numeric(df[lead_col], errors="coerce").fillna(7).astype(int) if lead_col else 7
         else:
-            mapped_df["lead_days"] = 7
+            mapped_df["lead_days"] = pd.to_numeric(df[lead_col], errors="coerce").fillna(7).astype(int) if lead_col else 7
+
+        # 6b. Impute missing person_count based on slot median
+        if mapped_df["person_count"].isna().any():
+            mapped_df["person_count"] = mapped_df["person_count"].fillna(mapped_df.groupby("commercial_slot")["person_count"].transform("median")).fillna(4).astype(int)
+        else:
+            mapped_df["person_count"] = mapped_df["person_count"].astype(int)
             
         # Clean up raw columns that were explicitly mapped to prevent FeatureEngineer's automatic renamer
         # from renaming the raw (and potentially sparse) columns into our clean column names.
@@ -365,8 +378,46 @@ class DataPipeline:
         else:
             mapped_df["competitor_price"] = 0.0
 
-        # Filter invalid rows (price <= 0)
-        mapped_df = mapped_df[mapped_df["selling_price"] > 0].copy()
+        # --- USER REQUESTED MANUAL FIXES ---
+        if "Title" in df.columns:
+            # Upgrade partial payments to 12500
+            partial_mask = df["Title"].str.contains("partial payment", case=False, na=False)
+            partial_mask = partial_mask.reindex(mapped_df.index, fill_value=False)
+            mapped_df.loc[partial_mask, "selling_price"] = 12500.0
+
+        if "Description" in df.columns:
+            # Extract addon feature (e.g. JBL sound system)
+            addon_mask = df["Description"].astype(str).str.contains("jbl|sound system|speaker", case=False, na=False)
+            addon_mask = addon_mask.reindex(mapped_df.index, fill_value=False)
+            mapped_df["has_addon"] = addon_mask.astype(int)
+
+            # Drop partial-access bookings (only room, photo shoots)
+            desc_mask = df["Description"].astype(str).str.contains("only room|only photo|photoshoot|photography", case=False, na=False)
+            desc_mask = desc_mask.reindex(mapped_df.index, fill_value=False)
+            # mapped_df = mapped_df[~desc_mask] # REMOVED PER USER REQUEST
+
+        else:
+            mapped_df["has_addon"] = 0
+
+        # --- NLP Feature Extraction (Advanced Spec Phase 8) ---
+        combined_text = pd.Series("", index=mapped_df.index)
+        if "Title" in df.columns:
+            combined_text += df["Title"].reindex(mapped_df.index).astype(str).fillna("").str.lower() + " "
+        if "Description" in df.columns:
+            combined_text += df["Description"].reindex(mapped_df.index).astype(str).fillna("").str.lower()
+            
+        mapped_df["is_farm_11"] = combined_text.str.contains(r"farm\s*11|farm\s*number\s*11", regex=True, na=False).astype(int)
+        mapped_df["is_friend_relation"] = combined_text.str.contains(r"friend|mitra|relative|relation|bhai", regex=True, na=False).astype(int)
+        mapped_df["has_discount"] = combined_text.str.contains(r"discount|less", regex=True, na=False).astype(int)
+        mapped_df["has_penalty"] = combined_text.str.contains(r"penalty|advance", regex=True, na=False).astype(int)
+        mapped_df["has_catering"] = combined_text.str.contains(r"food|catering|meal|jamvanu|lunch|dinner", regex=True, na=False).astype(int)
+        mapped_df["is_corporate"] = combined_text.str.contains(r"corporate|company|staff", regex=True, na=False).astype(int)
+        # -----------------------------------------------------
+
+
+        # Drop specific outliers identified by the user - REMOVED PER USER REQUEST
+        # mapped_df = mapped_df[~(outlier_1 | outlier_2 | outlier_3 | o_heet | o_yuvraj | o_bhavesh | o_jay | o_mihir | o_hitesh | o_jaydeep)]
+
         if mapped_df.empty:
             raise ValueError(f"No valid numeric booking prices (> 0) found in column '{price_col}'. Please confirm column mapping.")
 
@@ -404,6 +455,20 @@ class DataPipeline:
         vacation_col = next((c for c in df.columns if "vacation" in str(c).lower()), None)
         if vacation_col:
             mapped_df["is_vacation"] = df[vacation_col].apply(lambda x: 1 if str(x).strip().upper() in ["1", "TRUE", "Y", "YES"] else 0)
+
+        # 12. Explicit Summer Peak Season (March, April, May, June)
+        def check_summer_peak(date_val):
+            try:
+                m = pd.to_datetime(date_val).month
+                return 1 if m in [3, 4, 5, 6] else 0
+            except:
+                return 0
+        mapped_df["is_summer_peak"] = mapped_df["booking_date"].apply(check_summer_peak)
+
+        # 13. Short Stay Logic (As per user: < 2000 price for 12H slots means duration was < 10 hours)
+        # We backfill duration_hours to 8.0 for these records so the model learns that short duration = low price
+        short_stay_mask = mapped_df["commercial_slot"].isin(["12H_DAY", "12H_NIGHT", "COUPLE_SLOT", "COUPLE_DAY", "COUPLE_NIGHT", "COUPLE_HALF_DAY", "COUPLE_FULL_DAY"]) & (mapped_df["selling_price"] > 0) & (mapped_df["selling_price"] <= 2000)
+        mapped_df.loc[short_stay_mask, "duration_hours"] = 8.0
 
         # Hierarchical Outlier Detection
         clean_df, outliers_df = cls.detect_and_flag_group_outliers(mapped_df)
@@ -602,21 +667,13 @@ class DataPipeline:
         df_temp['outlier_score'] = outlier_scores
         df_temp['outlier_reason'] = outlier_reasons
         df_temp['is_global_outlier'] = df_temp['outlier_score'] >= 2
+        df_temp['historical_outlier_flag'] = (df_temp['outlier_score'] >= 2).astype(int)
         
-        # --- START USER LOGIC: Drop very low priced records (< 1500) ---
-        df_temp = df_temp[df_temp["selling_price"] >= 1500]
-        # Additional Rule: Drop 24H Night records with rent <= 3000
-        mask_24h_night_low = (df_temp["slot_type"].astype(str).str.upper().str.contains("24H NIGHT")) & (df_temp["selling_price"] <= 3000)
-        df_temp = df_temp[~mask_24h_night_low]
-        
-        # USER REQUEST: Explicitly drop the 13-Jan-2024 12H Night record (₹4500)
-        mask_jan_13 = (df_temp["booking_date_dt"] == pd.to_datetime("2024-01-13")) & (df_temp["slot_type"].astype(str).str.upper().str.contains("12H"))
-        df_temp = df_temp[~mask_jan_13]
-        
-        # USER REQUEST: Explicitly drop the 20-Nov-2024 24H Night record (₹8000)
-        mask_nov_20 = (df_temp["booking_date_dt"] == pd.to_datetime("2024-11-20")) & (df_temp["slot_type"].astype(str).str.upper().str.contains("24H NIGHT"))
-        df_temp = df_temp[~mask_nov_20]
-        # --- END USER LOGIC ---
+        # Check if excel provided 'outlier' column
+        outlier_col = next((c for c in df_temp.columns if str(c).lower().strip() == "outlier"), None)
+        if outlier_col:
+            df_temp['excel_outlier_flag'] = df_temp[outlier_col].apply(lambda x: 1 if pd.notna(x) and str(x).strip() != "" else 0)
+            df_temp['historical_outlier_flag'] = df_temp[['historical_outlier_flag', 'excel_outlier_flag']].max(axis=1)
         
         # Finally, sort by date chronologically
         df_temp = df_temp.sort_values(by="booking_date", ascending=True)
@@ -628,8 +685,12 @@ class DataPipeline:
                 
         outliers_df = df_temp[df_temp['is_global_outlier'] == True].copy()
         
-        # BUSINESS RULE: Preserve all valid business rows. Do NOT delete statistical outliers.
-        clean_df = df_temp.copy()
+        # USER REQUESTED BUSINESS RULE: Drop rows explicitly tagged in the Excel 'outlier' column
+        if outlier_col:
+            clean_df = df_temp[df_temp['excel_outlier_flag'] == 0].copy()
+            clean_df.drop(columns=['excel_outlier_flag'], inplace=True, errors='ignore')
+        else:
+            clean_df = df_temp.copy()
         
         # We also need to add is_global_outlier to clean_df (it's false) and outliers_df (it's true)
         # So we can just return them. The caller uses `clean_df` to continue pipeline.

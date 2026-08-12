@@ -14,24 +14,56 @@ class HistoricalAdjustments:
         Rule 5: Lead Days Engine V2
         Learn purely from historical data in the PricingContext. No fixed percentages.
         """
-        req_lead = context.request.get("lead_days", 0)
-        df = context.retrieved_segment
-        base_price = context.base_price
+        req_lead = float(context.request.get("lead_days", 0))
+        # Fetch AI-learned dynamic lead slope and mean lead days from historical stats
+        learned_slope = float(context.stats.get("learned_lead_slope", 0.0))
+        mean_lead_days = float(context.stats.get("mean_lead_days", 7.0))
         
-        # User-defined explicit business rules for lead days
-        if req_lead == 0:
-            adj = base_price * -0.03
-            reason = f"0 days lead time. Applying 3% discount (-₹{abs(adj):.0f})."
-        elif 1 <= req_lead <= 5:
-            adj = 0.0
-            reason = f"{req_lead} days lead time (1-5 days). No adjustment (+₹0)."
+        # Calculate difference from standard booking window
+        diff_days = float(req_lead) - mean_lead_days
+        
+        # Distance-based Shrinkage (Extrapolation Penalty)
+        df = context.retrieved_segment
+        hist_leads = df["lead_days"].dropna().values if not df.empty and "lead_days" in df.columns else np.array([])
+        if len(hist_leads) > 0:
+            hist_min = float(np.min(hist_leads))
+            hist_max = float(np.max(hist_leads))
         else:
-            adj = base_price * 0.03
-            reason = f"{req_lead} days lead time (> 5 days). Applying 3% premium (+₹{adj:.0f})."
+            hist_min, hist_max = mean_lead_days, mean_lead_days
+            
+        extrap_dist = 0.0
+        if req_lead < hist_min:
+            extrap_dist = hist_min - req_lead
+        elif req_lead > hist_max:
+            extrap_dist = req_lead - hist_max
+            
+        # Shrink the adjustment strength by 10% for every day outside the observed historical range (max 80% shrinkage)
+        shrink_factor = max(0.2, 1.0 - (extrap_dist * 0.10))
+        effective_slope = learned_slope * shrink_factor
+        
+        # Total adjustment based on AI learned slope
+        adj = diff_days * effective_slope
+        
+        if adj > 0:
+            word = "premium"
+            sign = "+"
+        else:
+            word = "discount"
+            sign = ""
+            
+        extrap_msg = f" (Extrapolation shrunk by {100-(shrink_factor*100):.0f}%)" if shrink_factor < 1.0 else ""
+        reason = f"{req_lead} days lead time (Avg is {mean_lead_days:.1f}). Applying AI Learned Slope of ₹{effective_slope:.1f}/day. {sign}₹{adj:.0f} {word}.{extrap_msg}"
             
         return {
-            "adjustment_amount": adj,
-            "reason": reason
+            "adjustment_amount": float(adj),
+            "reason": reason,
+            "evidence": {
+                "raw_learned_slope": float(learned_slope),
+                "effective_slope": float(effective_slope),
+                "extrap_dist": float(extrap_dist),
+                "shrink_factor": float(shrink_factor),
+                "diff_days": float(diff_days)
+            }
         }
 
     @classmethod
@@ -61,4 +93,26 @@ class HistoricalAdjustments:
         
     @classmethod
     def calculate_weather_adjustment(cls, context: PricingContext) -> Dict[str, Any]:
-        return {"adjustment_amount": 0.0, "reason": "Weather forecast is Clear (No Adjustment)."}
+        from app.services.weather_service import weather_service
+        
+        booking_date = context.request.get("start_datetime", "").split(" ")[0]
+        if not booking_date:
+            return {"adjustment_amount": 0.0, "reason": "No booking date provided for weather."}
+            
+        forecast = weather_service.get_forecast(booking_date)
+        condition = forecast.get("condition", "Clear").lower()
+        rain_prob = forecast.get("rain_probability", 0.0)
+        
+        base_price = context.base_price
+        
+        if "heavy rain" in condition or "thunderstorm" in condition or rain_prob > 80:
+            adj = -base_price * 0.10
+            return {"adjustment_amount": float(adj), "reason": f"Heavy Rain / Bad Weather forecasted. Applying 10% discount (-₹{abs(adj):.0f})."}
+        elif "rain" in condition or rain_prob > 40:
+            adj = -base_price * 0.05
+            return {"adjustment_amount": float(adj), "reason": f"Rain forecasted. Applying 5% discount (-₹{abs(adj):.0f})."}
+        elif ("clear" in condition or "sunny" in condition) and context.request.get("is_weekend", False):
+            adj = base_price * 0.03
+            return {"adjustment_amount": float(adj), "reason": f"Clear/Sunny weekend weather. Applying 3% premium (+₹{adj:.0f})."}
+            
+        return {"adjustment_amount": 0.0, "reason": f"Weather forecast is {condition.title()} (No Adjustment)."}

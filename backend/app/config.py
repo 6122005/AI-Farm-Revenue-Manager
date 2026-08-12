@@ -9,8 +9,8 @@ DATA_DIR.mkdir(parents=True, exist_ok=True)
 MODELS_DIR.mkdir(parents=True, exist_ok=True)
 
 DATABASE_URL = os.getenv("DATABASE_URL", f"sqlite:///{DATA_DIR}/farmhouse_rm.db")
-OPENWEATHER_API_KEY = os.getenv("OPENWEATHER_API_KEY","")
-OPENWEATHER_CITY = os.getenv("OPENWEATHER_CITY", "Lonavala")
+OPENWEATHER_API_KEY = os.getenv("OPENWEATHER_API_KEY", "")
+OPENWEATHER_CITY = os.getenv("OPENWEATHER_CITY", "Surat,IN")
 ENABLE_EXPECTED_REVENUE_OPTIMIZATION = os.getenv("ENABLE_EXPECTED_REVENUE_OPTIMIZATION", "False").lower() in ("true", "1", "t")
 
 

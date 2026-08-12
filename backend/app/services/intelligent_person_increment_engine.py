@@ -22,56 +22,50 @@ class IntelligentPersonIncrementEngine:
                 "evidence": {}
             }
             
-        # 1. Use user-approved flat rate per person (₹62.5/person = ₹500 for 8 extra people)
-        slope = 62.5
+        # 1. Fetch AI-learned dynamic guest rate from historical stats
+        # Ensure monotonic property (more guests >= price).
+        raw_rate = float(context.stats.get("learned_guest_rate", 62.5))
+        learned_rate = max(0.0, raw_rate)
         
         # 2. Determine base capacity (anchor guests)
-        # If the segment has data, we find the average guest count for those bookings.
-        # Otherwise, assume 2 guests (couple).
-        anchor_guests = df['person_count'].mean() if not df.empty else 2.0
+        # Retrieval engine normalizes base price to standard capacity of 4.
+        anchor_guests = 4.0
         
-        # 3. Calculate tiered extra guests
-        # Tier 1: Guests between anchor_guests and 15 (₹62.5 per person)
-        # Tier 2: Guests above 15 (₹100 per person)
+        # Calculate diff from standard capacity (can be negative for discounts)
+        diff_guests = float(req_guests - anchor_guests)
         
-        tier1_rate = 62.5
-        tier2_rate = 100.0
-        tier2_threshold = 15.0
+        # 3. Distance-based Shrinkage (Extrapolation Penalty)
+        hist_guests = df["person_count"].dropna().values if "person_count" in df.columns else np.array([])
+        if len(hist_guests) > 0:
+            hist_min = float(np.min(hist_guests))
+            hist_max = float(np.max(hist_guests))
+        else:
+            hist_min, hist_max = anchor_guests, anchor_guests
+            
+        extrap_dist = 0.0
+        if req_guests < hist_min:
+            extrap_dist = hist_min - req_guests
+        elif req_guests > hist_max:
+            extrap_dist = req_guests - hist_max
+            
+        # Shrink the adjustment strength by 10% for every guest outside the observed historical range (max 80% shrinkage)
+        shrink_factor = max(0.2, 1.0 - (extrap_dist * 0.10))
+        effective_rate = learned_rate * shrink_factor
         
-        # Total extra guests compared to standard capacity
-        total_extra = max(0.0, float(req_guests - anchor_guests))
-        
-        tier1_guests = 0.0
-        tier2_guests = 0.0
-        
-        if req_guests > anchor_guests:
-            if req_guests <= tier2_threshold:
-                # All extra guests fall in Tier 1
-                tier1_guests = float(req_guests - anchor_guests)
-            else:
-                # Some or all extra guests fall in Tier 2
-                if anchor_guests >= tier2_threshold:
-                    # Anchor is already >= 15, so all extra are Tier 2
-                    tier2_guests = float(req_guests - anchor_guests)
-                else:
-                    # Anchor is < 15, req is > 15. Mix of Tier 1 and Tier 2
-                    tier1_guests = float(tier2_threshold - anchor_guests)
-                    tier2_guests = float(req_guests - tier2_threshold)
-                    
         # 4. Calculate total adjustment
-        tier1_adj = tier1_guests * tier1_rate
-        tier2_adj = tier2_guests * tier2_rate
-        adj = tier1_adj + tier2_adj
+        adj = diff_guests * effective_rate
+        
+        sign = "+" if adj >= 0 else ""
+        extrap_msg = f" (Extrapolation shrunk by {100-(shrink_factor*100):.0f}%)" if shrink_factor < 1.0 else ""
         
         return {
             "adjustment_amount": float(adj),
-            "reason": f"Standard capacity {anchor_guests:.1f}. Added ₹{tier1_rate} for {tier1_guests:.1f} guests up to 15, and ₹{tier2_rate} for {tier2_guests:.1f} guests beyond 15.",
+            "reason": f"Base 4 guests. {sign}₹{effective_rate:.1f}/person for {diff_guests:+.1f} guests from standard.{extrap_msg}",
             "evidence": {
-                "tier1_rate": float(tier1_rate),
-                "tier2_rate": float(tier2_rate),
-                "tier1_guests": float(tier1_guests),
-                "tier2_guests": float(tier2_guests),
-                "anchor_guests": float(anchor_guests),
-                "total_extra_guests": float(total_extra)
+                "raw_learned_rate": float(raw_rate),
+                "effective_rate": float(effective_rate),
+                "extrap_dist": float(extrap_dist),
+                "shrink_factor": float(shrink_factor),
+                "diff_guests": float(diff_guests)
             }
         }
