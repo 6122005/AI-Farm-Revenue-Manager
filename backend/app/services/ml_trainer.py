@@ -273,8 +273,28 @@ class MLTrainer:
         
         X_test, y_test = X_full.iloc[split_idx:].copy(), y_rate.iloc[split_idx:].copy()
         
-        # Train Model B (Baseline + Residual) with explicit regularization
-        model_B = XGBRegressor(n_estimators=100, max_depth=4, learning_rate=0.05, random_state=42)
+        # Define strict business logic constraints for XGBoost globally
+        monotone_constraints = {}
+        for feat in features:
+            if feat == "person_count": 
+                monotone_constraints[feat] = 1 # More guests MUST increase price globally
+            elif feat == "is_weekend": 
+                monotone_constraints[feat] = 1 # Weekends MUST increase price globally
+            elif feat == "vacation_weekend": 
+                monotone_constraints[feat] = 1 # Vacations MUST increase price globally
+            elif feat == "lead_days": 
+                monotone_constraints[feat] = -1 # Advance bookings MUST discount price globally
+            else: 
+                monotone_constraints[feat] = 0
+                
+        # Advanced models can now handle these features while strictly adhering to constraints
+        model_B = XGBRegressor(
+            n_estimators=150, 
+            max_depth=5, 
+            learning_rate=0.05, 
+            random_state=42,
+            monotone_constraints=monotone_constraints
+        )
         model_B.fit(X_train[features], y_resid_train)
         
         test_baselines = df_sorted["historical_baseline_price"].iloc[split_idx:].values
