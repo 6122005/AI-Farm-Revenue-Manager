@@ -205,14 +205,18 @@ class MLTrainer:
         else:
             df_sorted = df.copy()
             
-        # USER INSTRUCTION: Drop festival and Extended Day records during model training
+        # USER INSTRUCTION: Drop manual outliers and Extended Day records during model training
         orig_len = len(df_sorted)
         drop_mask = pd.Series(False, index=df_sorted.index)
+        
         if "commercial_slot" in df_sorted.columns:
-            drop_mask = drop_mask | (df_sorted["commercial_slot"] == "EXTENDED_DAY")
+            drop_mask = drop_mask | (df_sorted["commercial_slot"] == "Extended Day")
+        
+        if "is_manual_outlier" in df_sorted.columns:
+            drop_mask = drop_mask | (df_sorted["is_manual_outlier"] == 1)
             
         df_sorted = df_sorted[~drop_mask].copy()
-        print(f"🧹 Dropped {orig_len - len(df_sorted)} festival/extended-day records from training.")
+        print(f"🧹 Dropped {orig_len - len(df_sorted)} manual outlier/extended-day records from training.")
             
         # Ensure we have baselines
         df_sorted = HistoricalPricingBaseline.fit_predict_expanding(df_sorted)

@@ -816,6 +816,15 @@ class FeatureEngineer:
         is_family = 1 if 3 <= person_count <= 12 else 0
         is_corporate = 1 if person_count > 12 else 0
 
+        # Handle user's manually tagged outliers (often passed as 'outlier ')
+        is_manual_outlier = 0
+        for col_name in row.keys():
+            if str(col_name).strip().lower() == "outlier":
+                val = str(row[col_name]).strip().lower()
+                if val == "outlier":
+                    is_manual_outlier = 1
+                    break
+
         slot_type = slot_engine.normalize_commercial_slot(row.get("slot_type", row.get("commercial_slot", "12H Day")))
         commercial_slot = slot_type # backwards compatibility
         
@@ -1138,6 +1147,7 @@ class FeatureEngineer:
             "is_couple": is_couple,
             "is_family": is_family,
             "is_corporate": is_corporate,
+            "is_manual_outlier": is_manual_outlier,
             "weather_condition": weather_condition,
             "lead_days": lead_days,
             "lead_time_bucket": lead_time_bucket,
