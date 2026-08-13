@@ -1061,6 +1061,15 @@ class FeatureEngineer:
         base_index += (booking_pace - 1.0) * 10.0
         demand_index = float(np.clip(base_index, 5.0, 100.0))
 
+        # Parse actual start_time if available
+        actual_start_hour = dt.hour
+        if "start_time" in row and pd.notnull(row["start_time"]):
+            raw_st = str(row["start_time"]).split()[-1]
+            try:
+                actual_start_hour = int(raw_st.split(":")[0])
+            except:
+                pass
+
         features = {
             "booking_date": dt.strftime("%Y-%m-%d"),
             "month": month,
@@ -1068,7 +1077,7 @@ class FeatureEngineer:
             "month_cos": month_cos,
             "year": year,
             "day_of_week": day_of_week,
-            "hour": dt.hour,
+            "hour": actual_start_hour,
             "minute": dt.minute,
             "week_of_year": week_of_year,
             "day_of_year": day_of_year,

@@ -231,10 +231,11 @@ class MLTrainer:
         y_resid = df_sorted["residual_target"]
         
         # We no longer drop person_count or lead_days so XGBoost can model them
-        drop_cols = ["selling_price", "residual_target", "historical_baseline_price", "baseline_level", "baseline_evidence_count", "baseline_confidence", "booking_date", "start_date", "start_datetime", "commercial_slot", "festival_name", "start_time", "end_date", "end_time"]
+        # Per user request, we KEEP commercial_slot, festival_name, and outlier_score
+        drop_cols = ["selling_price", "residual_target", "historical_baseline_price", "baseline_level", "baseline_evidence_count", "baseline_confidence", "booking_date", "start_date", "start_datetime", "start_time", "end_date", "end_time"]
         
         leaky_cols = [
-            'outlier_score', 'segment_mean', 'segment_trimmed_mean', 'segment_std',
+            'segment_mean', 'segment_trimmed_mean', 'segment_std',
             'month_weekend_slot_avg', 'hierarchical_fallback_avg', 'highest_revenue_weekday',
             'highest_revenue_month', 'p75_price', 'p25_price', 'effective_daily_rate',
             'slot_lag_price_1', 'slot_lag_price_2', 'occupancy_rate_7d', 'occupancy_rate_30d',
@@ -273,28 +274,8 @@ class MLTrainer:
         
         X_test, y_test = X_full.iloc[split_idx:].copy(), y_rate.iloc[split_idx:].copy()
         
-        # Define strict business logic constraints for XGBoost globally
-        monotone_constraints = {}
-        for feat in features:
-            if feat == "person_count": 
-                monotone_constraints[feat] = 1 # More guests MUST increase price globally
-            elif feat == "is_weekend": 
-                monotone_constraints[feat] = 1 # Weekends MUST increase price globally
-            elif feat == "vacation_weekend": 
-                monotone_constraints[feat] = 1 # Vacations MUST increase price globally
-            elif feat == "lead_days": 
-                monotone_constraints[feat] = -1 # Advance bookings MUST discount price globally
-            else: 
-                monotone_constraints[feat] = 0
-                
-        # Advanced models can now handle these features while strictly adhering to constraints
-        model_B = XGBRegressor(
-            n_estimators=150, 
-            max_depth=5, 
-            learning_rate=0.05, 
-            random_state=42,
-            monotone_constraints=monotone_constraints
-        )
+        # Train Model B (Baseline + Residual)
+        model_B = XGBRegressor(n_estimators=100, max_depth=4, learning_rate=0.05, random_state=42)
         model_B.fit(X_train[features], y_resid_train)
         
         test_baselines = df_sorted["historical_baseline_price"].iloc[split_idx:].values
