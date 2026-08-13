@@ -208,8 +208,6 @@ class MLTrainer:
         # USER INSTRUCTION: Drop festival and Extended Day records during model training
         orig_len = len(df_sorted)
         drop_mask = pd.Series(False, index=df_sorted.index)
-        if "is_festival" in df_sorted.columns:
-            drop_mask = drop_mask | (df_sorted["is_festival"] == 1)
         if "commercial_slot" in df_sorted.columns:
             drop_mask = drop_mask | (df_sorted["commercial_slot"] == "EXTENDED_DAY")
             
@@ -220,10 +218,20 @@ class MLTrainer:
         df_sorted = HistoricalPricingBaseline.fit_predict_expanding(df_sorted)
         df_sorted["residual_target"] = df_sorted["selling_price"] - df_sorted["historical_baseline_price"]
         
+        # Smart Denoising: Remove unexplainable anomalies, but KEEP Vacation and Festival spikes!
+        mean_res = df_sorted["residual_target"].mean()
+        std_res = df_sorted["residual_target"].std()
+        z_scores = np.abs((df_sorted["residual_target"] - mean_res) / std_res)
+        
+        smart_noise_mask = (z_scores > 2.0) & (df_sorted.get("is_vacation", 0) == 0) & (df_sorted.get("is_festival", 0) == 0)
+        df_sorted = df_sorted[~smart_noise_mask].copy()
+        print(f"🧹 Smart Denoising: Dropped {smart_noise_mask.sum()} true anomalies (Preserved Vacation/Festival spikes).")
+
         y_rate = df_sorted["selling_price"]
         y_resid = df_sorted["residual_target"]
         
-        drop_cols = ["selling_price", "residual_target", "historical_baseline_price", "baseline_level", "baseline_evidence_count", "baseline_confidence", "booking_date", "start_date", "start_datetime", "commercial_slot", "festival_name", "start_time", "end_date", "end_time", "person_count", "lead_days"]
+        # We no longer drop person_count or lead_days so XGBoost can model them
+        drop_cols = ["selling_price", "residual_target", "historical_baseline_price", "baseline_level", "baseline_evidence_count", "baseline_confidence", "booking_date", "start_date", "start_datetime", "commercial_slot", "festival_name", "start_time", "end_date", "end_time"]
         
         leaky_cols = [
             'outlier_score', 'segment_mean', 'segment_trimmed_mean', 'segment_std',
@@ -237,6 +245,10 @@ class MLTrainer:
         ]
         drop_cols.extend(leaky_cols)
         
+        # Business Logic: Vacation + Weekend causes massive spikes, explicitly teach XGBoost
+        if "is_vacation" in df_sorted.columns and "is_weekend" in df_sorted.columns:
+            df_sorted["vacation_weekend"] = df_sorted["is_vacation"] * df_sorted["is_weekend"]
+
         X_full = df_sorted.drop(columns=[col for col in drop_cols if col in df_sorted.columns])
         
         cat_cols = X_full.select_dtypes(include=['object', 'category']).columns
@@ -261,8 +273,8 @@ class MLTrainer:
         
         X_test, y_test = X_full.iloc[split_idx:].copy(), y_rate.iloc[split_idx:].copy()
         
-        # Train Model B (Baseline + Residual)
-        model_B = XGBRegressor(n_estimators=200, max_depth=5, learning_rate=0.05, random_state=42)
+        # Train Model B (Baseline + Residual) with explicit regularization
+        model_B = XGBRegressor(n_estimators=100, max_depth=4, learning_rate=0.05, random_state=42)
         model_B.fit(X_train[features], y_resid_train)
         
         test_baselines = df_sorted["historical_baseline_price"].iloc[split_idx:].values
