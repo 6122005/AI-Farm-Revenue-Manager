@@ -125,14 +125,18 @@ class BusinessInsightDiscoverer:
             wt_avg = wt_prices.mean() if not wt_prices.empty else 3200.0
             
             summer_demand_ratio = round(float(sm_avg / ms_avg), 3) if ms_avg > 0 else 1.20
+            # USER INSTRUCTION: Limit winter price surge
             winter_demand_ratio = round(float(wt_avg / ms_avg), 3) if ms_avg > 0 else 1.05
+            winter_demand_ratio = min(1.15, max(1.0, winter_demand_ratio))
             
             # 5. Rain impact ratio
             rainy_prices = df[df["rain_probability"] > 50.0][p_col] if "rain_probability" in df.columns else pd.Series()
             sunny_prices = df[df["rain_probability"] <= 50.0][p_col] if "rain_probability" in df.columns else pd.Series()
             rainy_avg = rainy_prices.mean() if not rainy_prices.empty else 2800.0
             sunny_avg = sunny_prices.mean() if not sunny_prices.empty else 3500.0
-            rain_impact_ratio = round(float(rainy_avg / sunny_avg), 3) if sunny_avg > 0 else 0.85
+            # USER INSTRUCTION: Give very less discount to rain
+            rain_impact_ratio = round(float(rainy_avg / sunny_avg), 3) if sunny_avg > 0 else 0.95
+            rain_impact_ratio = max(0.95, min(1.0, rain_impact_ratio))
             
             # 6. Lead time effect
             adv_prices = df[df["lead_days"] > 14][p_col] if "lead_days" in df.columns else pd.Series()
@@ -872,8 +876,8 @@ class FeatureEngineer:
         insights = cls._load_insights()
         weekend_premium = insights.get("weekend_premium_ratio", 1.25)
         summer_demand_ratio = insights.get("summer_demand_ratio", 1.2)
-        winter_demand_ratio = insights.get("winter_demand_ratio", 1.0)
-        rain_impact_ratio = insights.get("rain_impact_ratio", 0.85)
+        winter_demand_ratio = min(1.15, insights.get("winter_demand_ratio", 1.05))
+        rain_impact_ratio = max(0.95, insights.get("rain_impact_ratio", 0.95))
 
         base_demand = 50.0
         if is_weekend:
@@ -1192,7 +1196,20 @@ class FeatureEngineer:
             "weekend_premium_ratio": weekend_premium,
             "summer_demand_ratio": summer_demand_ratio,
             "winter_demand_ratio": winter_demand_ratio,
-            "rain_impact_ratio": rain_impact_ratio
+            "rain_impact_ratio": rain_impact_ratio,
+            
+            # Pass-through NLP flags from prediction_engine / DataPipeline
+            "is_farm_11": int(float(row.get("is_farm_11", 0))) if pd.notna(row.get("is_farm_11")) else 0,
+            "has_discount": int(float(row.get("has_discount", 0))) if pd.notna(row.get("has_discount")) else 0,
+            "has_penalty": int(float(row.get("has_penalty", 0))) if pd.notna(row.get("has_penalty")) else 0,
+            "has_catering": int(float(row.get("has_catering", 0))) if pd.notna(row.get("has_catering")) else 0,
+            "has_addon": int(float(row.get("has_addon", 0))) if pd.notna(row.get("has_addon")) else 0,
+            "is_friend_relation": int(float(row.get("is_friend_relation", 0))) if pd.notna(row.get("is_friend_relation")) else 0,
+            "is_corporate": int(float(row.get("is_corporate", 0))) if pd.notna(row.get("is_corporate")) else 0,
+            "duration": float(row.get("duration", row.get("duration_hours", 24.0))),
+            "number_of_guests": int(float(row.get("number_of_guests", person_count))) if pd.notna(row.get("number_of_guests", person_count)) else person_count,
+            "days_since_last_booking": float(row.get("days_since_last_booking", 0.0)),
+            "calendar_weekend": int(day_of_week >= 5)
         }
         
         return features

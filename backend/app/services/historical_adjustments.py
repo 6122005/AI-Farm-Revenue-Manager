@@ -42,7 +42,8 @@ class HistoricalAdjustments:
         effective_slope = learned_slope * shrink_factor
         
         # Total adjustment based on AI learned slope
-        adj = diff_days * effective_slope
+        # Disabled manual lead adjustment to prevent double-counting (ML handles lead time)
+        adj = 0.0
         
         if adj > 0:
             word = "premium"
@@ -52,7 +53,7 @@ class HistoricalAdjustments:
             sign = ""
             
         extrap_msg = f" (Extrapolation shrunk by {100-(shrink_factor*100):.0f}%)" if shrink_factor < 1.0 else ""
-        reason = f"{req_lead} days lead time (Avg is {mean_lead_days:.1f}). Applying AI Learned Slope of ₹{effective_slope:.1f}/day. {sign}₹{adj:.0f} {word}.{extrap_msg}"
+        reason = f"{req_lead} days lead time. Native ML Baseline active. (Lead time absorbed by model)."
             
         return {
             "adjustment_amount": float(adj),
@@ -80,16 +81,9 @@ class HistoricalAdjustments:
     @classmethod
     def calculate_demand_adjustment(cls, context: PricingContext) -> Dict[str, Any]:
         count = context.booking_count
-        base_price = context.base_price
         
-        if count >= 15:
-            adj = base_price * 0.05
-            return {"adjustment_amount": float(adj), "reason": f"High demand detected ({count} similar historical bookings). (+5%)"}
-        elif count <= 2:
-            adj = -base_price * 0.05
-            return {"adjustment_amount": float(adj), "reason": f"Low demand detected ({count} similar historical bookings). (-5%)"}
-            
-        return {"adjustment_amount": 0.0, "reason": "Normal historical demand pattern. (+₹0)"}
+        # Disabled manual demand adjustment to prevent double-counting (ML handles volume)
+        return {"adjustment_amount": 0.0, "reason": "Native ML Baseline active. (Demand absorbed by model)."}
         
     @classmethod
     def calculate_weather_adjustment(cls, context: PricingContext) -> Dict[str, Any]:
@@ -106,13 +100,13 @@ class HistoricalAdjustments:
         base_price = context.base_price
         
         if "heavy rain" in condition or "thunderstorm" in condition or rain_prob > 80:
-            adj = -base_price * 0.10
-            return {"adjustment_amount": float(adj), "reason": f"Heavy Rain / Bad Weather forecasted. Applying 10% discount (-₹{abs(adj):.0f})."}
+            adj = 0.0
+            return {"adjustment_amount": float(adj), "reason": f"Heavy Rain forecasted. (Discount already factored by ML engine)."}
         elif "rain" in condition or rain_prob > 40:
-            adj = -base_price * 0.05
-            return {"adjustment_amount": float(adj), "reason": f"Rain forecasted. Applying 5% discount (-₹{abs(adj):.0f})."}
+            adj = 0.0
+            return {"adjustment_amount": float(adj), "reason": f"Rain forecasted. (Discount already factored by ML engine)."}
         elif ("clear" in condition or "sunny" in condition) and context.request.get("is_weekend", False):
-            adj = base_price * 0.03
-            return {"adjustment_amount": float(adj), "reason": f"Clear/Sunny weekend weather. Applying 3% premium (+₹{adj:.0f})."}
+            adj = 0.0
+            return {"adjustment_amount": float(adj), "reason": f"Clear/Sunny weekend weather."}
             
         return {"adjustment_amount": 0.0, "reason": f"Weather forecast is {condition.title()} (No Adjustment)."}

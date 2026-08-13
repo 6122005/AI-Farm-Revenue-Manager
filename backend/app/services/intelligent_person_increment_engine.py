@@ -53,14 +53,17 @@ class IntelligentPersonIncrementEngine:
         effective_rate = learned_rate * shrink_factor
         
         # 4. Calculate total adjustment
-        adj = diff_guests * effective_rate
+        # Disabled manual guest adjustment to prevent double-counting (ML handles person_count natively)
+        adj = 0.0
         
         sign = "+" if adj >= 0 else ""
         extrap_msg = f" (Extrapolation shrunk by {100-(shrink_factor*100):.0f}%)" if shrink_factor < 1.0 else ""
         
+        reason = f"{req_guests} Guests. Native ML Baseline active. (Guest increment absorbed by model)."
+        
         return {
             "adjustment_amount": float(adj),
-            "reason": f"Base 4 guests. {sign}₹{effective_rate:.1f}/person for {diff_guests:+.1f} guests from standard.{extrap_msg}",
+            "reason": reason,
             "evidence": {
                 "raw_learned_rate": float(raw_rate),
                 "effective_rate": float(effective_rate),

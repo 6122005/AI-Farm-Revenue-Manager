@@ -456,14 +456,19 @@ class DataPipeline:
         if vacation_col:
             mapped_df["is_vacation"] = df[vacation_col].apply(lambda x: 1 if str(x).strip().upper() in ["1", "TRUE", "Y", "YES"] else 0)
 
-        # 12. Explicit Summer Peak Season (March, April, May, June)
-        def check_summer_peak(date_val):
+        # 12. Precise Vacation Season (April 10 to June 15) as per user business rule
+        def check_vacation_season(date_val):
             try:
-                m = pd.to_datetime(date_val).month
-                return 1 if m in [3, 4, 5, 6] else 0
+                dt = pd.to_datetime(date_val)
+                m = dt.month
+                d = dt.day
+                if m == 4 and d >= 10: return 1
+                if m == 5: return 1
+                if m == 6 and d <= 15: return 1
+                return 0
             except:
                 return 0
-        mapped_df["is_summer_peak"] = mapped_df["booking_date"].apply(check_summer_peak)
+        mapped_df["is_vacation_season"] = mapped_df["booking_date"].apply(check_vacation_season)
 
         # 13. Short Stay Logic (As per user: < 2000 price for 12H slots means duration was < 10 hours)
         # We backfill duration_hours to 8.0 for these records so the model learns that short duration = low price

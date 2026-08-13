@@ -219,7 +219,9 @@ async def confirm_mapping_and_train_models(mapping: ColumnMappingRequest):
         slot_dist_clean = {str(k): int(v) for k, v in slot_dist.items()}
 
         # 2. Train models (Purges old model cache & records timestamps)
-        champion_artifact = MLTrainer.train_and_select_champion(enriched_df)
+        from app.services.feature_engineering import FeatureEngineer
+        features_df = FeatureEngineer.process_dataframe(enriched_df.copy())
+        champion_artifact = MLTrainer.train_and_select_champion(features_df)
         
         saved_model_path = str(CHAMPION_MODEL_PATH.absolute())
         model_creation_timestamp = champion_artifact.get("trained_at", datetime.now().isoformat())
@@ -367,9 +369,10 @@ async def upload_booking_dataset_direct(file: UploadFile = File(...)):
         print(f"✅ Timestamp Match Verified: TRUE")
         print(f"=======================================================\n")
 
+        retention_pct = round((cleaned_rows_count / raw_rows_count) * 100, 1) if raw_rows_count > 0 else 0
         return {
             "status": "success",
-            "message": f"Successfully processed '{file.filename}', retained 100% of uploaded records ({cleaned_rows_count} rows), and trained champion model '{champion_artifact['champion_name']}'.",
+            "message": f"Successfully processed '{file.filename}', retained {retention_pct}% of uploaded records ({cleaned_rows_count} rows out of {raw_rows_count}), and trained champion model '{champion_artifact['champion_name']}'.",
             "champion_model": champion_artifact["champion_name"],
             "r2_score": champion_artifact["metrics"]["r2"],
             "mae": champion_artifact["metrics"]["mae"],
