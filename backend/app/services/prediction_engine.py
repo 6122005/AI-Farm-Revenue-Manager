@@ -94,6 +94,12 @@ class PredictionEngine:
                 else:
                     df[col] = 0.0
                     
+        # Business Logic: Add vacation_weekend interaction for XGBoost
+        if "is_vacation" in df.columns and "is_weekend" in df.columns:
+            df["vacation_weekend"] = df["is_vacation"] * df["is_weekend"]
+        else:
+            df["vacation_weekend"] = 0
+
         X = df[feature_cols].copy()
         
         for col in cat_cols:
@@ -125,11 +131,6 @@ class PredictionEngine:
                 baseline_val = base_df["selling_price"].median()
                 
             residual_val = float(model["base_model"].predict(X)[0])
-            
-            # GUARDRAIL: Prevent wild extrapolations for out-of-distribution inputs (e.g. 2 guests for a slot that normally has 15)
-            # The residual should never swing the price by more than 15% of the baseline.
-            max_swing = baseline_val * 0.15
-            residual_val = max(-max_swing, min(max_swing, residual_val))
             
             pred_raw = float(baseline_val + residual_val)
         else:
