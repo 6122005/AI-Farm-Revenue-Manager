@@ -32,7 +32,7 @@ class SlotEngine:
 
     def normalize_commercial_slot(self, slot_val: Any) -> str:
         """
-        Normalize slot names but preserve Couple categories.
+        Normalize slot names preserving Couple and 24H variants.
         """
         s = str(slot_val).upper().strip().replace("_", " ").replace("-", " ")
         if "COUPLE" in s:
@@ -40,27 +40,21 @@ class SlotEngine:
                 return "Couple Half Night"
             return "Couple Half Day"
             
-        if "12H DAY" in s or "HALF DAY" in s:
-            return "12H Day"
-        elif "12H NIGHT" in s:
-            return "12H Night"
-        elif "24H DAY" in s:
-            return "24H Day"
-        elif "24H NIGHT" in s:
-            return "24H Night"
-            
-        if "24H" in s or "EXTENDED" in s or "48H" in s or "MULTI" in s:
-            if "NIGHT" in s:
+        is_24 = any(k in s for k in ["24H", "24 HOUR", "24 HRS", "FULL DAY", "FULL NIGHT", "48H", "EXTENDED", "MULTI"])
+        is_night = any(k in s for k in ["NIGHT", "19:00", "20:00", "21:00", "22:00"])
+        
+        if is_24:
+            if is_night:
                 return "24H Night"
             return "24H Day"
-        if "12H" in s:
-            if "NIGHT" in s:
-                return "12H Night"
-            return "12H Day"
             
-        # Fallbacks
-        if "NIGHT" in s:
+        if "12H DAY" in s or "HALF DAY" in s or "DAY" in s:
+            if "NIGHT" not in s:
+                return "12H Day"
+                
+        if "12H NIGHT" in s or "HALF NIGHT" in s or "NIGHT" in s:
             return "12H Night"
+            
         return "12H Day"
 
     def classify_booking(self, checkin_hour: int, duration_hours: float) -> str:
@@ -98,44 +92,27 @@ class SlotEngine:
             "duration": duration
         }
 
-    def classify_weekend(self, start_dt: datetime, slot: str) -> int:
+    def classify_weekend(self, start_dt: datetime, slot: str = "") -> int:
         """
-        Exact commercial weekend classification matching Farm_Booking_Data_new.xlsx formula.
+        User Explicit Weekend Directive:
+        - Saturday AFTER 17:00:00 PM -> WEEKEND (1)
+        - Entire Sunday (all day & night) -> WEEKEND (1)
+        - All other times (Mon-Fri, and Saturday before 17:00:00 PM) -> WEEKDAY (0)
         """
         if start_dt is None:
             return 0
             
-        from datetime import time
-        weekday = start_dt.weekday()
-        start_time = start_dt.time()
+        weekday = start_dt.weekday() # 0=Mon, 4=Fri, 5=Sat, 6=Sun
+        hour = start_dt.hour
         
-        night_slots = {
-            "12H Night",
-            "Couple Half Night",
-            "24H Night",
-            "Couple Full Night",
-        }
-        day_slots = {
-            "12H Day",
-            "Couple Half Day",
-            "24H Day",
-            "Couple Full Day",
-        }
-        
-        # Rule 1: Saturday (weekday=5) Evening/Night Booking >= 17:00
-        if (
-            weekday == 5
-            and start_time >= time(17, 0)
-            and slot in night_slots
-        ):
-            return 1
+        # Rule 1: Saturday (weekday=5) AFTER 17:00:00 PM
+        if weekday == 5:
+            if hour >= 17:
+                return 1
+            return 0
             
-        # Rule 2: Sunday (weekday=6) Morning/Day Booking 06:00 to 11:59
-        if (
-            weekday == 6
-            and time(6, 0) <= start_time < time(12, 0)
-            and slot in day_slots
-        ):
+        # Rule 2: Entire Sunday (weekday=6)
+        if weekday == 6:
             return 1
             
         return 0

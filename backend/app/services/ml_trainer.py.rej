@@ -1,0 +1,20 @@
+@@ -269,7 +269,18 @@
+         print("========================================")
+         
+         # Advanced models can now handle these features
+-        model_B = XGBRegressor(n_estimators=100, max_depth=4, learning_rate=0.05, random_state=42)
++        monotone_constraints = {}
++        for feat in features:
++            if feat == "person_count": monotone_constraints[feat] = 1 
++            elif feat == "is_weekend": monotone_constraints[feat] = 1 
++            elif feat == "vacation_weekend": monotone_constraints[feat] = 1 
++            elif feat == "lead_days": monotone_constraints[feat] = -1 
++            else: monotone_constraints[feat] = 0
++            
++        model_B = XGBRegressor(
++            n_estimators=150, max_depth=5, learning_rate=0.05, random_state=42, 
++            monotone_constraints=monotone_constraints
++        )
+         
+         # Fit on full data for production
+         model_B.fit(X_full[features], y_resid)

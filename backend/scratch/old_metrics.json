@@ -1,0 +1,100 @@
+{
+  "Train Records": 551,
+  "Test Records": 138,
+  "R2": 0.8566608614636251,
+  "MAE": 750.799327025235,
+  "RMSE": 1017.6013588027554,
+  "Bias": -293.6129624240352,
+  "Worst 10": [
+    {
+      "booking_date": "2026-06-06",
+      "commercial_slot": "24H Night",
+      "person_count": 18,
+      "selling_price": 14000.0,
+      "prediction": 8822.596099853516,
+      "absolute_error": 5177.403900146484,
+      "duration_hours": 23.0
+    },
+    {
+      "booking_date": "2026-06-20",
+      "commercial_slot": "24H Night",
+      "person_count": 10,
+      "selling_price": 10000.0,
+      "prediction": 7122.459121704102,
+      "absolute_error": 2877.5408782958984,
+      "duration_hours": 22.0
+    },
+    {
+      "booking_date": "2026-03-05",
+      "commercial_slot": "24H Night",
+      "person_count": 12,
+      "selling_price": 4500.0,
+      "prediction": 7062.315528869629,
+      "absolute_error": 2562.315528869629,
+      "duration_hours": 23.0
+    },
+    {
+      "booking_date": "2026-06-27",
+      "commercial_slot": "24H Night",
+      "person_count": 15,
+      "selling_price": 6000.0,
+      "prediction": 8474.416004180908,
+      "absolute_error": 2474.416004180908,
+      "duration_hours": 23.0
+    },
+    {
+      "booking_date": "2026-05-05",
+      "commercial_slot": "Couple Half Day",
+      "person_count": 2,
+      "selling_price": 5500.0,
+      "prediction": 3059.452651977539,
+      "absolute_error": 2440.547348022461,
+      "duration_hours": 9.0
+    },
+    {
+      "booking_date": "2026-06-01",
+      "commercial_slot": "12H Day",
+      "person_count": 10,
+      "selling_price": 4500.0,
+      "prediction": 2172.9006328582764,
+      "absolute_error": 2327.0993671417236,
+      "duration_hours": 9.0
+    },
+    {
+      "booking_date": "2026-06-13",
+      "commercial_slot": "24H Night",
+      "person_count": 10,
+      "selling_price": 10000.0,
+      "prediction": 7722.549133300781,
+      "absolute_error": 2277.4508666992188,
+      "duration_hours": 23.0
+    },
+    {
+      "booking_date": "2026-03-07",
+      "commercial_slot": "24H Night",
+      "person_count": 10,
+      "selling_price": 7000.0,
+      "prediction": 9215.648376464844,
+      "absolute_error": 2215.6483764648438,
+      "duration_hours": 23.0
+    },
+    {
+      "booking_date": "2026-05-31",
+      "commercial_slot": "12H Night",
+      "person_count": 14,
+      "selling_price": 4500.0,
+      "prediction": 2587.7108306884766,
+      "absolute_error": 1912.2891693115234,
+      "duration_hours": 12.0
+    },
+    {
+      "booking_date": "2026-03-14",
+      "commercial_slot": "24H Night",
+      "person_count": 16,
+      "selling_price": 8500.0,
+      "prediction": 10388.953674316406,
+      "absolute_error": 1888.9536743164062,
+      "duration_hours": 23.0
+    }
+  ]
+}

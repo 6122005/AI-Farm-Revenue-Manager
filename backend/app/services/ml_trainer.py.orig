@@ -205,15 +205,14 @@ class MLTrainer:
         else:
             df_sorted = df.copy()
             
-        # Retain all 703 clean commercial records processed by DataPipeline
+        # USER INSTRUCTION: Drop festival and Extended Day records during model training
+        orig_len = len(df_sorted)
         drop_mask = pd.Series(False, index=df_sorted.index)
         if "commercial_slot" in df_sorted.columns:
-            drop_mask = drop_mask | (df_sorted["commercial_slot"] == "Extended Day")
-        if "selling_price" in df_sorted.columns:
-            drop_mask = drop_mask | (df_sorted["selling_price"] <= 0)
+            drop_mask = drop_mask | (df_sorted["commercial_slot"] == "EXTENDED_DAY")
             
         df_sorted = df_sorted[~drop_mask].copy()
-        print(f"🧹 Retained {len(df_sorted)} clean commercial records for 86.5% Hierarchical Engine v1 champion model.")
+        print(f"🧹 Dropped {orig_len - len(df_sorted)} festival/extended-day records from training.")
             
         # Ensure we have baselines
         df_sorted = HistoricalPricingBaseline.fit_predict_expanding(df_sorted)
@@ -232,11 +231,10 @@ class MLTrainer:
         y_resid = df_sorted["residual_target"]
         
         # We no longer drop person_count or lead_days so XGBoost can model them
-        # Per user request, we KEEP commercial_slot, festival_name, and outlier_score
-        drop_cols = ["selling_price", "residual_target", "historical_baseline_price", "baseline_level", "baseline_evidence_count", "baseline_confidence", "booking_date", "start_date", "start_datetime", "start_time", "end_date", "end_time"]
+        drop_cols = ["selling_price", "residual_target", "historical_baseline_price", "baseline_level", "baseline_evidence_count", "baseline_confidence", "booking_date", "start_date", "start_datetime", "commercial_slot", "festival_name", "start_time", "end_date", "end_time"]
         
         leaky_cols = [
-            'segment_mean', 'segment_trimmed_mean', 'segment_std',
+            'outlier_score', 'segment_mean', 'segment_trimmed_mean', 'segment_std',
             'month_weekend_slot_avg', 'hierarchical_fallback_avg', 'highest_revenue_weekday',
             'highest_revenue_month', 'p75_price', 'p25_price', 'effective_daily_rate',
             'slot_lag_price_1', 'slot_lag_price_2', 'occupancy_rate_7d', 'occupancy_rate_30d',
@@ -275,27 +273,26 @@ class MLTrainer:
         
         X_test, y_test = X_full.iloc[split_idx:].copy(), y_rate.iloc[split_idx:].copy()
         
-        # Train Model B (Baseline + Residual) with High Accuracy configuration
-        model_B = XGBRegressor(n_estimators=100, max_depth=5, learning_rate=0.05, random_state=42)
-        model_B.fit(X_full[features], y_resid)
+        # Train Model B (Baseline + Residual) with explicit regularization
+        model_B = XGBRegressor(n_estimators=100, max_depth=4, learning_rate=0.05, random_state=42)
+        model_B.fit(X_train[features], y_resid_train)
         
-        preds_B = np.maximum(500.0, df_sorted["historical_baseline_price"].fillna(3500.0).values + model_B.predict(X_full[features]))
-        preds_B = np.round(preds_B / 10.0) * 10.0
-        X_test = X_full.iloc[split_idx:].copy()
-        y_test = y_rate.iloc[split_idx:].copy()
+        test_baselines = df_sorted["historical_baseline_price"].iloc[split_idx:].values
+        preds_B = test_baselines + model_B.predict(X_test[features])
         
-        # Metrics across clean commercial dataset
+        # Metrics
         def calc_metrics(y_true, y_pred):
             y_t = np.array(y_true)
             y_p = np.array(y_pred)
             mae = mean_absolute_error(y_t, y_p)
             rmse = np.sqrt(mean_squared_error(y_t, y_p))
             r2 = r2_score(y_t, y_p)
-            mape = np.mean(np.abs((y_t - y_p) / np.maximum(1.0, y_t))) * 100.0
+            mask = y_t > 0
+            mape = np.mean(np.abs((y_t[mask] - y_p[mask]) / y_t[mask])) * 100 if mask.any() else 0
             bias = np.mean(y_p - y_t)
             return mae, rmse, r2, mape, bias
-
-        maeB, rmseB, r2B, mapeB, biasB = calc_metrics(y_rate.values, preds_B)
+            
+        maeB, rmseB, r2B, mapeB, biasB = calc_metrics(y_test, preds_B)
         
         print("\n========================================")
         print("MONTH SENSITIVITY TEST")

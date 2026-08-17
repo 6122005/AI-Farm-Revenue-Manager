@@ -13,8 +13,8 @@ class HistoricalPricingBaseline:
             return df
             
         df = df.copy()
-        df["booking_date_dt"] = pd.to_datetime(df["booking_date"], errors="coerce")
-        df["start_datetime_dt"] = pd.to_datetime(df["start_datetime"], errors="coerce")
+        df["booking_date_dt"] = pd.to_datetime(df["booking_date"], errors="coerce", utc=True)
+        df["start_datetime_dt"] = pd.to_datetime(df["start_datetime"], errors="coerce", utc=True)
         
         # Sort by booking_date to prevent future leakage
         df = df.sort_values(by="booking_date_dt").copy()
@@ -31,8 +31,8 @@ class HistoricalPricingBaseline:
         evidence_counts = []
         confidences = []
         
-        # Pre-compute categorical mappings for speed
-        df["cat_upper"] = df["commercial_slot"].astype(str).str.upper()
+        from app.services.slot_engine import slot_engine
+        df["cat_upper"] = df["commercial_slot"].astype(str).apply(slot_engine.normalize_commercial_slot).str.upper()
         df["guest_band"] = pd.cut(df["person_count"], bins=[0, 4, 10, 20, 100], labels=["1-4", "5-10", "11-20", "20+"], right=True).astype(str)
         df["season_str"] = df.get("season", np.where(df["month"].isin([3, 4, 5]), "SUMMER", np.where(df["month"].isin([11, 12, 1, 2]), "WINTER", "MONSOON"))).astype(str).str.upper()
         df["dur_band"] = pd.cut(df["duration_hours"], bins=[-1, 5.5, 8.5, 12.5, 18.5, 24.5, 100], labels=["1-5H", "6-8H", "9-12H", "13-18H", "19-24H", "24H+"]).astype(str)
